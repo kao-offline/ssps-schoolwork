@@ -1,0 +1,1 @@
+{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"ssps-schoolwork","version":"0.1.0","description":"Read homework, project instructions, deadlines, announcements and documents from the student's Teams and Bakalari accounts.","author":{"name":"SSPS schoolwork project"}}

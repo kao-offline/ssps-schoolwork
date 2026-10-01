@@ -1,0 +1,105 @@
+# SSPS Schoolwork
+
+A local, read-only MCP server and agent skill that give an AI agent the context for homework and projects: Teams assignments, teacher announcements and replies, Bakaláři homework/messages, and attached documents.
+
+Each student runs their own process and connects their own accounts. No shared class database or AI provider key is required. The agent app supplies the AI. Node.js 22.13+ and npm are required. This repository uses npm and its committed lockfile.
+
+## Install and connect
+
+```powershell
+npm ci
+npm run build
+npm run setup
+```
+
+Fill in `MICROSOFT_CLIENT_ID` in `.env` using a school-approved Microsoft Entra app registration. `MICROSOFT_TENANT_ID` can be the school's tenant ID, otherwise it defaults to `organizations`. The Bakaláři default is `https://bakalari.ssps.cz`.
+
+`npm run setup` preserves an existing `.env` and generates an ignored `mcp.local.json` with the actual Node executable and absolute project paths. Use its `mcpServers.schoolwork` entry in your client configuration.
+
+```powershell
+npm run login:teams
+npm run login:bakalari
+npm run doctor
+```
+
+Teams login prints a Microsoft device-login URL/code. Sign in in your browser. Bakaláři login prompts for username and a hidden password locally; it saves the returned tokens, never the password. Don't put passwords or tokens in agent chats or command arguments. Run `npm run logout` to remove both local saved accounts. Disconnecting locally does not revoke Microsoft consent; that can be managed in your Microsoft account/school tenant.
+
+On Windows, token files under `~/.ssps-schoolwork` are encrypted using Windows DPAPI for the current Windows user. Other operating systems use private directory/file permissions (700/600); they do not use OS-backed encryption. Never share the credentials directory. Run one server process per student/data directory to avoid simultaneous token-cache writes. `SCHOOLWORK_DATA_DIR` can select a different private directory. Do not run this stdio process as a shared web service.
+
+## Microsoft app setup
+
+The school IT administrator may need to register or approve the app in Entra. Configure a public client supporting device-code flow (Authentication → allow public client flows). No client secret is needed. Request delegated read permissions:
+
+| Permission | Purpose |
+| --- | --- |
+| User.Read | Verify connected identity |
+| Team.ReadBasic.All | Discover joined Teams |
+| Channel.ReadBasic.All | Discover subject channels |
+| EduRoster.ReadBasic | Discover the student's education classes |
+| EduAssignments.Read | Read assignment instructions/resources |
+| ChannelMessage.Read.All | Read channel announcements and replies |
+| Files.Read.All | Read school files accessible to the signed-in student |
+
+Tenant policy/admin consent can block these permissions or device-code flow. A token copied from another app is not a substitute for this registration. Files.Read.All is read access to files the user can access; the server retrieves only documents requested by the agent. No application permissions, submission permissions or message-send permissions are requested. If consent fails, school IT must approve the application or provide an allowed authentication configuration.
+
+## Agent configuration
+
+Use stdio MCP in any client that supports it. This includes compatible Codex and Claude configurations; Hermes and other clients depend on their own MCP support. Hosted/web-only clients need a separately hosted, authenticated remote server; this release is local.
+
+Use absolute paths. A typical MCP JSON configuration is:
+
+```json
+{
+  "mcpServers": {
+    "schoolwork": {
+      "command": "node",
+      "args": [
+        "--env-file-if-exists=C:/path/to/ssps-bak-a-teams/.env",
+        "C:/path/to/ssps-bak-a-teams/dist/index.js"
+      ]
+    }
+  }
+}
+```
+
+Codex TOML equivalent:
+
+```toml
+[mcp_servers.schoolwork]
+command = "node"
+args = ["--env-file-if-exists=C:/path/to/ssps-bak-a-teams/.env", "C:/path/to/ssps-bak-a-teams/dist/index.js"]
+```
+
+Copy `skills/class-schoolwork` to the agent's supported skill directory (for Codex, `~/.codex/skills/`). Clients without skills can use that file's body as their project instructions. The portable `plugin.json` and `mcp.json` also package the skill/server together for clients supporting Agent Plugins; `${PLUGIN_ROOT}` is a plugin-host placeholder, not a normal shell variable. Build and install dependencies before using the plugin folder.
+
+Try: “Find my projects due this week, read the attached requirements and relevant teacher replies, then help me start the programming project.”
+
+## Tools and coverage
+
+`connection_status`, `list_classes`, `list_channels`, `list_schoolwork`, `get_assignment`, `list_announcements`, `get_thread`, `get_bakalari_message`, `resolve_document_link`, `read_document`.
+
+Lists support bounded output and pagination where applicable. Microsoft collections are fetched up to 20 upstream pages; `incomplete` reports that limit. Search is literal text over fetched posts, not a global semantic index. Threads are read separately. Each response includes retrieval time and the Prague timezone. Source errors are preserved instead of reporting an empty list.
+
+Document support: PDF with page references, DOCX text, PPTX with slide references, and common text/code files. Limits: 20 MiB download, 50 MiB expanded Office archive, 300 PDF pages, 50,000 characters per tool response. Use `nextOffset` to continue. Images, scanned PDF OCR, legacy Office formats and external websites are unsupported. Downloads are processed in memory, never executed or saved as homework files. Microsoft download URLs must use supported Microsoft storage hosts; no arbitrary URL fetch tool is exposed.
+
+Bakaláři homework deadlines are date-only. Messages are read without marking them read; the documented Komens list API uses POST for reading. No submit, send, complete, grade or file-edit tools exist. Timetables, notifications and shared hosting are outside this first release.
+
+## Validation and deployment
+
+```powershell
+npm run check
+npm audit
+npm run doctor
+```
+
+The tests cover document extraction, pagination, access-boundary failures, source errors and an actual stdio MCP handshake/tool call. Connector integration tests use controlled HTTP fixtures, not school access. Live verification requires account setup and consent: `doctor`, then exercise an actual assignment, channel thread and attached document in your agent.
+
+Deployment for this release is the local built stdio process (`npm start` or the absolute-path config above). There is no public endpoint. Updating: retain the previous checkout/build, run `npm ci` and `npm run check`, then restart the agent's MCP process. Roll back by reconnecting the previous build. No database or migrations are needed. No remote repository is configured yet. The included GitHub Actions workflow runs checks on Windows and Linux after pushing; its remote results have not been verified.
+
+API references: [MCP server guide](https://modelcontextprotocol.io/docs/develop/build-server), [Graph assignments](https://learn.microsoft.com/en-us/graph/api/educationclass-list-assignments), [Graph assignment resources](https://learn.microsoft.com/en-us/graph/api/educationassignment-list-resources), [Graph channel messages](https://learn.microsoft.com/en-us/graph/api/channel-list-messages), [Graph files](https://learn.microsoft.com/en-us/graph/api/driveitem-get-content), [Bakaláři community API v3 documentation](https://github.com/bakalari-api/bakalari-api-v3), [SSPS student portals](https://ssps.cz/skola/pro-studenty/). Bakaláři is a community-documented API; verify its behavior against the school's instance.
+
+## Current checkpoint
+
+Initial workspace was empty with no Git repository, remote, services or account configuration. Work is isolated on `feat/schoolwork-mcp`; the first feature commit is the recovery checkpoint (see `git log -1`). Local Windows verification on 2026-10-01: lint, typecheck, build, eight tests, skill validation and dependency audit passed. The built stdio process was verified through MCP initialization, tool discovery and a connection-status call. Setup generated local absolute paths and preserved the existing environment file.
+
+Live `doctor` reports Teams disconnected because MICROSOFT_CLIENT_ID is unset, and Bakaláři disconnected because local login has not been performed. Real assignments, announcements and documents have not been verified against school accounts. Next action: configure the public Microsoft app client ID, obtain school consent if required, run both login commands locally, then check a real assignment/thread/document. There is no hosted endpoint, installed agent connection, pushed branch, PR or remote CI result. Keep this checkout/build as the return point before changing deployment or account configuration.
