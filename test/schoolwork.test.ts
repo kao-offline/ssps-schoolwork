@@ -120,6 +120,11 @@ test('MCP tools integrate with paginated Graph and Bakalari fixtures and reject 
     if (path.endsWith('/assignments')) return Response.json({ value: [{ id: 'a', displayName: 'Programming project', instructions: { content: '<p>Build a parser.</p>' }, dueDateTime: '2026-10-02T22:30:00Z' }], '@odata.nextLink': 'https://graph.microsoft.com/v1.0/second-page' });
     if (path.endsWith('/second-page')) return Response.json({ value: [{ id: 'b', displayName: 'Later', dueDateTime: '2026-10-08T12:00:00Z' }] });
     if (path.endsWith('/homeworks')) return Response.json({ Homeworks: [{ ID: 'h', Content: 'Read chapter one', DateEnd: '2026-10-03T00:00:00+02:00', Subject: { Name: 'Český jazyk' }, Attachments: [{ Id: 'file', Name: 'brief.txt' }] }] });
+    if (path.endsWith('/subjects')) return Response.json({ Subjects: [{ SubjectID: ' 4', SubjectName: 'English', SubjectAbbrev: 'AJ' }] });
+    if (path.endsWith('/subjects/themes/%204')) return Response.json({ Subject: { Id: ' 4', Name: 'English' }, Themes: [{ Date: '2026-09-29T00:00:00+02:00', Theme: 'Past tense', Note: 'Bring workbook', HourCaption: '1', LessonLabel: '3' }, { Date: '2026-10-01T00:00:00+02:00', Theme: 'Reading', Note: 'Chapter 2', HourCaption: '2', LessonLabel: '4' }] });
+    if (path.endsWith('/marks')) return Response.json({ Subjects: [{ Subject: { Id: ' 4', Name: 'English' }, Marks: [{ MarkText: '2', Weight: 3, Caption: 'Grammar', Theme: 'Past tense' }], AverageText: '2.0' }] });
+    if (path.endsWith('/classbook')) return new Response('Restricted teacher module', { status: 403 });
+    if (path.endsWith('/webmodule')) return Response.json({ WebModules: [{ Name: 'Documents', Url: 'next/dokumentyPrehled.aspx' }] });
     if (path.endsWith('/messages/received')) {
       assert.equal(init?.method, 'POST');
       return Response.json({ Messages: [{ Id: 'm', Text: '<p>Deadline moved.</p>', Title: 'Project update' }] });
@@ -130,7 +135,7 @@ test('MCP tools integrate with paginated Graph and Bakalari fixtures and reject 
     if (path.endsWith('/items/i')) return Response.json({ name: 'brief.txt', webUrl: 'https://school.sharepoint.com/brief.txt', '@microsoft.graph.downloadUrl': 'https://school.sharepoint.com/download' });
     if (path === '/download') { assert.ok(!(init?.headers as Record<string, string>)?.Authorization); return new Response('Build and document your parser.', { headers: { 'content-type': 'text/plain' } }); }
     if (path.endsWith('/me')) return Response.json({ id: 'student' });
-    if (path.endsWith('/user')) return Response.json({ UserId: 'student' });
+    if (path.endsWith('/user')) return Response.json({ UserId: 'student', UserType: 'Student', EnabledModules: [{ Module: 'Marks', Rights: ['ShowMarks'] }] });
     throw new Error('Unexpected fixture route');
   });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -144,7 +149,7 @@ test('MCP tools integrate with paginated Graph and Bakalari fixtures and reject 
     return JSON.parse((result.content as { text: string }[])[0].text).data;
   }
   try {
-    assert.equal((await client.listTools()).tools.length, 10);
+    assert.equal((await client.listTools()).tools.length, 15);
     const works = await call('list_schoolwork', { source: 'teams', classId: 'c', from: '2026-10-03', to: '2026-10-03' });
     assert.equal(works.items.length, 1); // Prague deadline crosses midnight from UTC.
     assert.equal(works.items[0].id, 'a');
@@ -162,6 +167,29 @@ test('MCP tools integrate with paginated Graph and Bakalari fixtures and reject 
     const status = await call('connection_status', {});
     assert.equal(status.teams.connected, true);
     assert.equal(status.bakalari.connected, true);
+    const capabilities = await call('bakalari_capabilities', {});
+    assert.equal(capabilities.userType, 'Student');
+    assert.ok(capabilities.readAreas.includes('report_cards'));
+    assert.ok(capabilities.webReadAreas.includes('documents'));
+    const subjects = await call('list_bakalari_subjects', {});
+    assert.equal(subjects.items[0].SubjectID, ' 4');
+    const topics = await call('list_bakalari_lesson_topics', { subjectId: ' 4', from: '2026-10-01', to: '2026-10-01' });
+    assert.equal(topics.items.length, 1);
+    assert.equal(topics.items[0].Theme, 'Reading');
+    const grades = await call('read_bakalari_data', { area: 'marks' });
+    assert.equal(JSON.parse(grades.json).Subjects[0].Marks[0].Weight, 3);
+    const firstChunk = await call('read_bakalari_data', { area: 'marks', maxCharacters: 100 });
+    const secondChunk = await call('read_bakalari_data', { area: 'marks', maxCharacters: 10000, offset: firstChunk.nextOffset, expectedContentHash: firstChunk.contentHash });
+    assert.deepEqual(JSON.parse(firstChunk.json + secondChunk.json), JSON.parse(grades.json));
+    const changed = await client.callTool({ name: 'read_bakalari_data', arguments: { area: 'marks', offset: 100, expectedContentHash: '0'.repeat(64) } });
+    assert.equal(changed.isError, true);
+    const restricted = await client.callTool({ name: 'read_bakalari_data', arguments: { area: 'classbook', from: '2026-10-01', to: '2026-10-02' } });
+    assert.equal(restricted.isError, true);
+    assert.match(JSON.stringify(restricted), /HTTP 403/);
+    const callsBeforeDenied = calls.length;
+    const mutatingArea = await client.callTool({ name: 'read_bakalari_data', arguments: { area: '../komens/message/send' } });
+    assert.equal(mutatingArea.isError, true);
+    assert.equal(calls.length, callsBeforeDenied);
     const before = calls.length;
     const blocked = await client.callTool({ name: 'resolve_document_link', arguments: { url: 'https://evil.example/steal' } });
     assert.equal(blocked.isError, true);
@@ -189,7 +217,7 @@ test('built server starts over stdio and gives actionable disconnected status wi
   try {
     await client.connect(transport);
     const tools = await client.listTools();
-    assert.equal(tools.tools.length, 10);
+    assert.equal(tools.tools.length, 15);
     const result = await client.callTool({ name: 'connection_status', arguments: {} });
     const data = JSON.parse((result.content as { text: string }[])[0].text).data;
     assert.equal(data.teams.connected, false);
