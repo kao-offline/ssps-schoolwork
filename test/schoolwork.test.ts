@@ -89,6 +89,7 @@ test('expired Bakalari credentials refresh once and save rotated tokens without 
     requests++;
     assert.equal(url, 'https://bakalari.ssps.cz/api/login');
     assert.equal(init?.method, 'POST');
+    assert.equal((init?.headers as Record<string, string>)['Accept-Language'], 'cs');
     const body = init?.body as URLSearchParams;
     assert.equal(body.get('grant_type'), 'refresh_token');
     assert.equal(body.get('refresh_token'), 'old-test-refresh');
@@ -111,6 +112,9 @@ test('MCP tools integrate with paginated Graph and Bakalari fixtures and reject 
   t.mock.method(globalThis, 'fetch', async (url: string, init?: RequestInit) => {
     calls.push({ url: String(url), init });
     const path = new URL(url).pathname;
+    if (new URL(url).hostname === 'bakalari.ssps.cz' && (init?.headers as Record<string, string>)['Accept-Language'] !== 'cs') {
+      return Response.json({ Message: 'An error has occurred.' }, { status: 500 });
+    }
     if (path.endsWith('/assignments/a/resources')) return Response.json({ value: [{ id: 'r', resource: { displayName: 'brief.txt', fileUrl: 'https://school.sharepoint.com/brief.txt' } }] });
     if (path.endsWith('/assignments/a')) return Response.json({ id: 'a', displayName: 'Programming project', instructions: { content: '<p>Build a parser.</p>' } });
     if (path.endsWith('/assignments')) return Response.json({ value: [{ id: 'a', displayName: 'Programming project', instructions: { content: '<p>Build a parser.</p>' }, dueDateTime: '2026-10-02T22:30:00Z' }], '@odata.nextLink': 'https://graph.microsoft.com/v1.0/second-page' });

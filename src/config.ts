@@ -8,3 +8,7 @@ export function bakBase() {
   return url.href.replace(/\/$/, '');
 }
 export function segment(value: string) { return encodeURIComponent(value); }
+export function bakHeaders(accessToken?: string): Record<string, string> {
+  // SSPS's API returns HTTP 500 if the requested culture is unspecified.
+  return { 'Accept-Language': 'cs', ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) };
+}

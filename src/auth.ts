@@ -1,5 +1,5 @@
 import { PublicClientApplication } from '@azure/msal-node';
-import { scopes, bakBase } from './config.js';
+import { scopes, bakBase, bakHeaders } from './config.js';
 import { loadSecret, saveSecret } from './store.js';
 import { request } from './http.js';
 
@@ -31,7 +31,7 @@ export async function microsoftToken() {
 type BakCredentials = { base: string; accessToken: string; refreshToken: string; expiresAt: number };
 export async function bakLogin(parameters: Record<string, string>) {
   const base = bakBase();
-  const response = await request(base + '/api/login', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_id: 'ANDR', ...parameters }) }, 'Bakaláři login');
+  const response = await request(base + '/api/login', { method: 'POST', headers: { ...bakHeaders(), 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_id: 'ANDR', ...parameters }) }, 'Bakaláři login');
   const token = await response.json();
   if (!token.access_token || !token.refresh_token || !Number.isFinite(Number(token.expires_in))) throw new Error('Bakaláři returned an invalid token response.');
   const credentials: BakCredentials = { base, accessToken: token.access_token, refreshToken: token.refresh_token, expiresAt: Date.now() + Number(token.expires_in) * 1000 };
