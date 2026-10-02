@@ -22,9 +22,28 @@ test('detects installed profiles including actual Hermes home, Grok and extensio
   const apps = detectAgents({ home, local, roaming, config, platform: 'win32', env: { PATH: '' } });
   assert.equal(apps.find(app => app.id === 'hermes')?.file, join(local, 'hermes/config.yaml'));
   assert.equal(apps.find(app => app.id === 'grok')?.detected, true);
-  assert.equal(apps.find(app => app.id === 'kilo')?.detected, true);
+  assert.equal(apps.find(app => app.id === 'kilo')?.detected, false, 'leftover extension settings are not an installed extension');
   assert.equal(apps.find(app => app.id === 'claude')?.detected, false);
   assert.equal(apps.some(app => app.id === 'muse'), false);
+});
+test('editor detection requires an installed app/extension and respects persistent exclusions', async () => {
+  const home = join(directory, 'editor-home'); const local = join(directory, 'editor-local'); const roaming = join(directory, 'editor-roaming'); const config = join(directory, 'editor-config');
+  const paths = { home, local, roaming, config, platform: 'win32' as const, env: { PATH: '' } };
+  for (const file of [join(home, '.codeium/windsurf/mcp_config.json'), join(roaming, 'Code/User/globalStorage/kilocode.kilo-code/settings/mcp_settings.json')]) {
+    await mkdir(join(file, '..'), { recursive: true }); await writeFile(file, '{}');
+  }
+  assert.equal(detectAgents(paths).find(app => app.id === 'windsurf')?.detected, false);
+  assert.equal(detectAgents(paths).find(app => app.id === 'kilo')?.detected, false);
+  const executable = join(local, 'Programs/Windsurf/Windsurf.exe');
+  await mkdir(join(executable, '..'), { recursive: true }); await writeFile(executable, 'fixture');
+  const extension = join(home, '.vscode/extensions');
+  await mkdir(join(extension, 'kilo-fixture'), { recursive: true });
+  await writeFile(join(extension, 'kilo-fixture/package.json'), '{}');
+  await writeFile(join(extension, 'extensions.json'), JSON.stringify([{ identifier: { id: 'kilocode.kilo-code' }, relativeLocation: 'kilo-fixture' }]));
+  for (const id of ['windsurf', 'kilo']) assert.equal(detectAgents(paths).find(app => app.id === id)?.detected, true);
+  await mkdir(join(home, '.ssps-schoolwork'), { recursive: true });
+  await writeFile(join(home, '.ssps-schoolwork/setup-preferences.json'), JSON.stringify({ excludedApps: ['windsurf', 'kilo'] }));
+  for (const id of ['windsurf', 'kilo']) assert.equal(detectAgents(paths).find(app => app.id === id)?.detected, false);
 });
 test('JSONC retains comments, provider settings and other servers; each client gets its native transport shape', () => {
   const input = '{\n// student preferences\n"provider":{"key":"synthetic-fixture-value"},"mcpServers":{"other":{"url":"https://example.test/mcp"}},\n}\n';

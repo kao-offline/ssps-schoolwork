@@ -1,9 +1,10 @@
 import { spawn } from 'node:child_process';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { detectAgents, installAgent, serverEntries } from '../dist/setup-agents.js';
 import { cacheAuth, cacheRequest } from '../dist/teams-cache-client.js';
 import { warmCache } from '../dist/setup-warm.js';
+import { dataDir } from '../dist/config.js';
 const root = resolve(import.meta.dirname, '..');
 const flags = process.argv.slice(2);
 const args = [`--env-file-if-exists=${join(root, '.env')}`];
@@ -31,10 +32,20 @@ async function worker(source) {
 }
 async function main() {
   const known = new Set(['--no-login', '--no-startup', '--agents-only', '--detect']);
-  if (flags.some(flag => !known.has(flag) && !/^--(?:apps|sources|cache-timeout)=/.test(flag)) || sources.some(source => !['teams', 'bakalari', 'discord'].includes(source))) throw new Error('Unknown setup option/source. Use --help.');
+  if (flags.some(flag => !known.has(flag) && !/^--(?:apps|exclude|sources|cache-timeout)=/.test(flag)) || sources.some(source => !['teams', 'bakalari', 'discord'].includes(source))) throw new Error('Unknown setup option/source. Use --help.');
   const timeout = Number(option('cache-timeout', ['180'])[0]);
   if (!Number.isInteger(timeout) || timeout < 10 || timeout > 900) throw new Error('Cache timeout must be 10–900 seconds.');
-  const apps = detectAgents();
+  let apps = detectAgents();
+  const excluded = option('exclude');
+  if (excluded) {
+    if (excluded.some(id => !apps.some(app => app.id === id))) throw new Error('Unknown excluded app ID. Run --detect for supported IDs.');
+    const file = join(dataDir, 'setup-preferences.json');
+    let previous = { excludedApps: [] };
+    try { previous = JSON.parse(await readFile(file, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    await mkdir(dataDir, { recursive: true, mode: 0o700 });
+    await writeFile(file, JSON.stringify({ ...previous, excludedApps: [...new Set([...previous.excludedApps, ...excluded])] }, null, 2) + '\n', { mode: 0o600 });
+    apps = detectAgents();
+  }
   const requested = option('apps');
   if (requested?.some(id => !apps.some(app => app.id === id))) throw new Error('Unknown app ID. Run --detect for supported IDs.');
   if (flags.includes('--detect')) {

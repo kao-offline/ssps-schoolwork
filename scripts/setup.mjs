@@ -17,7 +17,7 @@ function run(command, parameters, input) {
 async function main() {
   if (Number(process.versions.node.split('.')[0]) < 22 || (Number(process.versions.node.split('.')[0]) === 22 && Number(process.versions.node.split('.')[1]) < 13)) throw new Error('Install Node.js 22.13 or later, then rerun setup.');
   if (flags.includes('--help')) {
-    console.log('node scripts/setup.mjs [--detect] [--agents-only] [--no-login] [--no-startup] [--apps=codex,claude,hermes] [--sources=teams,bakalari,discord] [--cache-timeout=180]');
+    console.log('node scripts/setup.mjs [--detect] [--agents-only] [--no-login] [--no-startup] [--apps=codex,claude,hermes] [--exclude=windsurf,kilo] [--sources=teams,bakalari,discord] [--cache-timeout=180]');
     return;
   }
   if (!flags.includes('--detect') && !flags.includes('--agents-only') && !flags.includes('--no-login') && !process.stdin.isTTY) throw new Error('Sign-in needs an interactive terminal. Run setup there, or use --no-login to reuse existing accounts.');

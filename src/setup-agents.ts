@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { readFile, writeFile, mkdir, rename } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, dirname, resolve, delimiter } from 'node:path';
@@ -42,7 +42,24 @@ export function detectAgents(p = defaultPaths()): Agent[] {
   for (const [id, folder, filename] of [['cline', 'saoudrizwan.claude-dev', 'cline_mcp_settings.json'], ['roo', 'rooveterinaryinc.roo-cline', 'mcp_settings.json'], ['kilo', 'kilocode.kilo-code', 'mcp_settings.json']]) {
     specifications.push({ id, name: id, file: join(code, 'globalStorage', folder, 'settings', filename), format: 'json' });
   }
-  return specifications.map(agent => ({ ...agent, detected: existsSync(agent.file) || dirname(agent.file) !== home && existsSync(dirname(agent.file)) || hasCommand(agent.id === 'vscode' ? 'code' : agent.id, p) || (agent.id === 'claude' && existsSync(join(home, '.claude'))) }));
+  let excluded: string[] = [];
+  try {
+    const preferences = JSON.parse(readFileSync(join(p.env.SCHOOLWORK_DATA_DIR || join(home, '.ssps-schoolwork'), 'setup-preferences.json'), 'utf8'));
+    if (!Array.isArray(preferences.excludedApps) || preferences.excludedApps.some((id: unknown) => typeof id !== 'string')) throw new Error('Invalid excludedApps');
+    excluded = preferences.excludedApps;
+  } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error('Invalid setup-preferences.json; correct it before rerunning setup.', { cause: error }); }
+  const extensions: Record<string, string> = { cline: 'saoudrizwan.claude-dev', roo: 'rooveterinaryinc.roo-cline', kilo: 'kilocode.kilo-code' };
+  function editorExtensionInstalled(id: string) {
+    try {
+      const base = join(home, '.vscode/extensions');
+      const installed = JSON.parse(readFileSync(join(base, 'extensions.json'), 'utf8'));
+      return installed.some((entry: any) => entry.identifier?.id === extensions[id] && typeof entry.relativeLocation === 'string' && existsSync(join(base, entry.relativeLocation, 'package.json')));
+    } catch { return false; }
+  }
+  const windsurfInstalled = hasCommand('windsurf', p) || (p.platform === 'win32'
+    ? [join(p.local, 'Programs/Windsurf/Windsurf.exe'), ...[p.env.ProgramFiles, p.env['ProgramFiles(x86)']].filter((dir): dir is string => !!dir).map(dir => join(dir, 'Windsurf/Windsurf.exe'))].some(existsSync)
+    : p.platform === 'darwin' && [join('/Applications', 'Windsurf.app/Contents/MacOS/Electron'), join(home, 'Applications/Windsurf.app/Contents/MacOS/Electron')].some(existsSync));
+  return specifications.map(agent => ({ ...agent, detected: !excluded.includes(agent.id) && (agent.id === 'windsurf' ? !!windsurfInstalled : agent.id in extensions ? editorExtensionInstalled(agent.id) : existsSync(agent.file) || dirname(agent.file) !== home && existsSync(dirname(agent.file)) || hasCommand(agent.id === 'vscode' ? 'code' : agent.id, p) || (agent.id === 'claude' && existsSync(join(home, '.claude')))) }));
 }
 export function serverEntries(root: string, sources = ['teams', 'bakalari', 'discord']) {
   const args = [`--env-file-if-exists=${join(root, '.env')}`];
