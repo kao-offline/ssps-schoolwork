@@ -1,0 +1,8 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "sspsmcp-install",
+  "compatibility_date": "2026-10-02",
+  "workers_dev": true,
+  "assets": { "directory": "./public", "not_found_handling": "none" },
+  "routes": [{ "pattern": "sspsmcp.kaooffline.top", "custom_domain": true }]
+}

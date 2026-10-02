@@ -11,3 +11,5 @@ mcp.teams-live.local.json
 mcp.discord-live.local.json
 setup-report.local.json
 .playwright-mcp/
+.wrangler/
+site/public/health.json

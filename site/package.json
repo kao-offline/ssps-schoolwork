@@ -1,0 +1,1 @@
+{"name":"sspsmcp-install-site","private":true,"type":"module","scripts":{"dev":"wrangler dev --port 8788","deploy":"node build.mjs && wrangler deploy","build":"node build.mjs"},"devDependencies":{"wrangler":"^4.146.0"}}

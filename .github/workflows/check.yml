@@ -19,5 +19,9 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm audit --omit=dev
+      - run: npm ci --prefix site
+      - run: npm --prefix site run build
+      - run: node --check site/public/app.js
+      - run: node site/node_modules/wrangler/bin/wrangler.js deploy --config site/wrangler.jsonc --dry-run
       - if: runner.os == 'Windows'
         run: npm run test:teams-browser
