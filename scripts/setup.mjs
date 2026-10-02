@@ -3,10 +3,14 @@ import { copyFile, readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { join, resolve, dirname, delimiter } from 'node:path';
+import { createTui, runTui, tuiEnabled } from './tui.mjs';
 const root = resolve(import.meta.dirname, '..');
 const flags = process.argv.slice(2);
 const args = [`--env-file-if-exists=${join(root, '.env')}`];
+const ui = !flags.includes('--detect') && tuiEnabled() ? createTui() : null;
+let uiActive = Boolean(ui);
 function run(command, parameters, input) {
+  if (ui && uiActive) return runTui(spawn, ui, command, parameters, { input, cwd: root });
   return new Promise((resolveRun, reject) => {
     const child = spawn(command, parameters, { cwd: root, stdio: input === undefined ? 'inherit' : ['pipe', 'inherit', 'inherit'], windowsHide: true });
     if (input !== undefined) child.stdin.end(input);
@@ -14,6 +18,7 @@ function run(command, parameters, input) {
     child.on('close', code => code === 0 ? resolveRun() : reject(new Error(`Setup phase failed (exit ${code}). Fix the error above and rerun the same command.`)));
   });
 }
+
 async function main() {
   if (Number(process.versions.node.split('.')[0]) < 22 || (Number(process.versions.node.split('.')[0]) === 22 && Number(process.versions.node.split('.')[1]) < 13)) throw new Error('Install Node.js 22.13 or later, then rerun setup.');
   if (flags.includes('--help')) {
@@ -35,21 +40,31 @@ async function main() {
   }
   let oldFingerprint;
   try { oldFingerprint = await readFile(stamp, 'utf8'); } catch { /* First setup after a manual npm install. */ }
+  const depsStep = ui?.step('[1/5] SETUP — dependencies');
+  const buildStep = ui?.step('[1/5] SETUP — local server');
   if (!installed || oldFingerprint && oldFingerprint !== fingerprint) {
     if (!npmCli) throw new Error('npm is required. Run this command using npm run setup.');
     if (existsSync(join(root, 'dist/teams-cache-client.js'))) await run(process.execPath, [...args, join(root, 'scripts/setup-stop-workers.mjs')]);
-    console.log('[1/5] SETUP — installing locked dependencies...');
+    if (!ui) console.log('[1/5] SETUP — installing locked dependencies...');
+    else ui.run(depsStep, 'locked install');
     // npm ci removes the whole tree; open agent MCP sessions can lock native DLLs.
     await run(process.execPath, [npmCli, existsSync(join(root, 'node_modules')) ? 'install' : 'ci', '--no-fund', '--no-audit', '--loglevel=error']);
-  } else console.log('[1/5] SETUP — dependencies already current.');
+    ui?.ok(depsStep, 'installed');
+  } else if (!ui) console.log('[1/5] SETUP — dependencies already current.');
+  else ui.ok(depsStep, 'already current');
   await writeFile(stamp, fingerprint);
   if (!flags.includes('--agents-only') && !flags.includes('--detect') || !existsSync(join(root, 'dist/setup-agents.js'))) {
     if (!npmCli) throw new Error('npm is required to build. Run this command using npm run setup.');
-    console.log('[1/5] SETUP — building local server...');
+    if (!ui) console.log('[1/5] SETUP — building local server...');
+    else ui.run(buildStep, 'tsc');
     await run(process.execPath, [npmCli, 'run', 'build', '--silent']);
-  }
+    ui?.ok(buildStep, 'built');
+  } else ui?.ok(buildStep, 'already built');
   if (!flags.includes('--detect') && !existsSync(join(root, '.env'))) await copyFile(join(root, '.env.example'), join(root, '.env'));
   // Start a new Node process so .env is loaded before importing account/store modules.
+  // The runner owns its own dashboard; hand the terminal back first.
+  uiActive = false;
+  ui?.stop();
   await run(process.execPath, [...args, join(root, 'scripts/setup-runner.mjs'), ...flags]);
 }
-main().catch(error => { console.error(error.message); process.exitCode = 1; });
+main().catch(error => { uiActive = false; ui?.stop(); console.error(error.message); process.exitCode = 1; });
