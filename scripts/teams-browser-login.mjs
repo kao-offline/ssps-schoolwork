@@ -16,7 +16,7 @@ try {
   const result = await client.callTool({ name: 'browser_navigate', arguments: { url: source === 'teams' ? 'https://teams.microsoft.com/v2/' : 'https://discord.com/channels/@me' } });
   if (result.isError) throw new Error('Browser navigation failed.');
   console.log(`Dedicated Chrome is open. Sign in to ${source} there. Do not send passwords or codes to the agent.`);
-  console.log('This process waits up to 15 minutes and then closes the browser after detecting the Teams app.');
+  console.log(`This process waits up to 15 minutes and then saves/closes the browser after detecting ${source}.`);
   let ready = false;
   for (let attempt = 0; attempt < 180; attempt++) {
     const snapshot = await client.callTool({ name: 'browser_snapshot', arguments: {} });
@@ -34,4 +34,8 @@ try {
 } catch {
   console.error('Live Teams browser sign-in was not verified. Check the dedicated Chrome window, installed Chrome and whether another session is using this school profile. No authentication state was printed.');
   process.exitCode = 1;
-} finally { await client.close(); if (pausedWorker) await cacheRequest('resume', {}, source).catch(() => undefined); }
+} finally {
+  try { await client.callTool({ name: 'browser_close', arguments: {} }); } catch { /* Release failed transport below. */ }
+  await client.close();
+  if (pausedWorker) await cacheRequest('resume', {}, source).catch(() => undefined);
+}

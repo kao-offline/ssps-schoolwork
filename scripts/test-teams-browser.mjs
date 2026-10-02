@@ -66,14 +66,18 @@ async function navigate(path) {
       assert.match(dom.messages[0].text, /revised project brief/);
     }
     if (path === '/assignment') {
-      const ref = text.match(/link "Download fixture" \[ref=(\w+)\]/)?.[1];
+      assert.match(text, /Build a parser\. Due Friday/, 'Persistent fixture sign-in must survive Chrome shutdown');
+      const ref = text.match(/link "Download fixture"[^\n]*?\[ref=([^\]]+)\]/)?.[1];
       assert.ok(ref, 'Fixture download link missing');
       const clicked = await client.callTool({ name: 'browser_click', arguments: { target: ref } });
       assert.ok(!clicked.isError, JSON.stringify(clicked));
       await client.callTool({ name: 'browser_wait_for', arguments: { time: 1 } });
     }
     return text;
-  } finally { await client.close(); }
+  } finally {
+    try { await client.callTool({ name: 'browser_close', arguments: {} }); } catch { /* Release failed transport below. */ }
+    await client.close();
+  }
 }
 try {
   assert.match(await navigate('/sign-in-fixture'), /Fixture sign-in complete/);

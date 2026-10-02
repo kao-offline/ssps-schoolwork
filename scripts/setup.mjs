@@ -1,8 +1,8 @@
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { copyFile, readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { join, resolve } from 'node:path';
+import { join, resolve, dirname, delimiter } from 'node:path';
 const root = resolve(import.meta.dirname, '..');
 const flags = process.argv.slice(2);
 const args = [`--env-file-if-exists=${join(root, '.env')}`];
@@ -21,7 +21,11 @@ async function main() {
     return;
   }
   if (!flags.includes('--detect') && !flags.includes('--agents-only') && !flags.includes('--no-login') && !process.stdin.isTTY) throw new Error('Sign-in needs an interactive terminal. Run setup there, or use --no-login to reuse existing accounts.');
-  const npmCli = process.env.npm_execpath || join(process.execPath, '../node_modules/npm/bin/npm-cli.js');
+  const npmCandidates = [process.env.npm_execpath, join(dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js'), join(dirname(process.execPath), '../lib/node_modules/npm/bin/npm-cli.js')];
+  if (process.platform !== 'win32') for (const dir of (process.env.PATH || '').split(delimiter)) {
+    try { npmCandidates.push(realpathSync(join(dir, 'npm'))); } catch { /* Check the next standard npm location. */ }
+  }
+  const npmCli = npmCandidates.find(candidate => candidate && existsSync(candidate));
   const lock = JSON.parse(await readFile(join(root, 'package-lock.json'), 'utf8'));
   const fingerprint = createHash('sha256').update(JSON.stringify(lock)).digest('hex');
   const stamp = join(root, 'node_modules/.schoolwork-lock');
@@ -32,7 +36,7 @@ async function main() {
   let oldFingerprint;
   try { oldFingerprint = await readFile(stamp, 'utf8'); } catch { /* First setup after a manual npm install. */ }
   if (!installed || oldFingerprint && oldFingerprint !== fingerprint) {
-    if (!existsSync(npmCli)) throw new Error('npm is required. Run this command using npm run setup.');
+    if (!npmCli) throw new Error('npm is required. Run this command using npm run setup.');
     if (existsSync(join(root, 'dist/teams-cache-client.js'))) await run(process.execPath, [...args, join(root, 'scripts/setup-stop-workers.mjs')]);
     console.log('[1/5] Installing the locked dependencies...');
     // npm ci removes the whole tree; open agent MCP sessions can lock native DLLs.
@@ -40,6 +44,7 @@ async function main() {
   } else console.log('[1/5] Dependencies are already current.');
   await writeFile(stamp, fingerprint);
   if (!flags.includes('--agents-only') && !flags.includes('--detect') || !existsSync(join(root, 'dist/setup-agents.js'))) {
+    if (!npmCli) throw new Error('npm is required to build. Run this command using npm run setup.');
     console.log('[1/5] Building the local server...');
     await run(process.execPath, [npmCli, 'run', 'build']);
   }

@@ -176,5 +176,9 @@ export class TeamsBrowser {
     }
     return { observations: [{ id: route.id, kind: route.kind, title: route.title, sourceUrl: view.sourceUrl, text: content }, ...documents, ...notices], discovered, owner };
   }
-  async close() { await this.client?.close(); this.client = undefined; this.started = false; }
+  async close() {
+    // Close Chrome's persistent context before terminating MCP so sign-in is flushed.
+    try { await this.client?.callTool({ name: 'browser_close', arguments: {} }); } catch { /* Still release a failed transport. */ }
+    await this.client?.close(); this.client = undefined; this.started = false;
+  }
 }
