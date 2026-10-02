@@ -26,7 +26,7 @@ const http = createServer((req, res) => {
 await new Promise(resolve => http.listen(0, '127.0.0.1', resolve));
 const url = `http://127.0.0.1:${http.address().port}`;
 const config = teamsLiveConfig();
-const args = [...config.args, '--headless'];
+const args = [...config.args];
 args[args.indexOf('--user-data-dir') + 1] = join(directory, 'profile');
 args[args.indexOf('--output-dir') + 1] = join(directory, 'teams-browser-output');
 async function navigate(path) {

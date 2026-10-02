@@ -1,6 +1,6 @@
 # Live Teams in Hermes
 
-This mode uses Microsoft's Playwright MCP to read the ordinary Teams web app in a dedicated Chrome window. It does not use our Graph app registration. Microsoft sign-in, MFA, school access policies and document permissions still apply. The student signs in directly in Microsoft pages.
+This mode uses Microsoft's Playwright MCP to read the ordinary Teams web app with a dedicated Chrome profile. Routine agent reads run headlessly, without opening or controlling your normal desktop browser. The login helper opens a visible dedicated window for manual sign-in. It does not use our Graph app registration. Microsoft sign-in, MFA, school access policies and document permissions still apply. The student signs in directly in Microsoft pages.
 
 On this computer the Hermes default profile has `teams_live` enabled alongside `schoolwork`. Open a new Hermes session after completing sign-in and use:
 
@@ -22,7 +22,7 @@ The login command opens Chrome and waits up to 15 minutes. It closes the browser
 
 ## Reading workflow
 
-Hermes exposes `mcp__teams_live__browser_navigate`, `browser_navigate_back`, `browser_snapshot`, `browser_click`, `browser_press_key`, `browser_tabs`, `browser_wait_for` and `browser_close`. Navigate to `https://teams.microsoft.com/v2/`, inspect a fresh snapshot and open classes, channels, assignment details and replies. Use snapshot references and ordinary UI navigation; scroll to load more content. The schoolwork skill constrains these generic interaction tools to reading. The browser tool itself does not enforce a read-only UI.
+Hermes exposes `mcp__teams_live__browser_navigate`, `browser_navigate_back`, `browser_snapshot`, `browser_click`, `browser_press_key`, `browser_tabs`, `browser_wait_for` and `browser_close`. Navigate to `https://teams.microsoft.com/v2/`, inspect a fresh snapshot and open classes, channels, assignment details and replies. Navigation/click actions can return a snapshot file link; call browser_snapshot without filename to get inline readable text. Pass the exact element reference (for example f4e207) as browser_click.target. Use snapshot references and ordinary UI navigation; scroll to load more content. The schoolwork skill constrains these generic interaction tools to reading. The browser tool itself does not enforce a read-only UI.
 
 Do not send messages, submit/undo homework, upload/edit files, answer quizzes, change grades or settings without a separate user instruction. Opening content can trigger normal Teams read receipts. Never extract cookies, storage, passwords or access tokens.
 
@@ -48,3 +48,7 @@ This is live UI access, not a complete structured school sync. State what was ch
 The default profile and downloads are under `~/.ssps-schoolwork/teams-browser-profile` and `teams-browser-output`; `SCHOOLWORK_DATA_DIR` overrides their parent directory. These contain private school data and authentication state. Keep them local and do not commit or upload them. Chrome manages its own authentication storage; it is separate from the server's DPAPI token store. `npm run logout` clears API tokens only and does not sign out this browser or delete downloads. Sign out using Microsoft's ordinary UI when needed.
 
 The integration pins `@playwright/mcp` to 0.0.83 and uses the installed Chrome browser. Hermes config was backed up locally with Windows DPAPI before adding this entry. Remove only `teams_live` from Hermes to disable the browser connection; avoid restoring an old whole config after other settings change.
+
+## Verified on this computer
+
+On 2026-10-02 the installed Hermes runtime read live class navigation (11 teams), an upcoming assignment list (three visible entries), an assignment detail and deadline, teacher channel posts and an expanded reply thread. It downloaded an assignment PDF and extracted its first page using read_downloaded_teams_document. A separate fresh headless Hermes process reused the saved sign-in and verified school class content. Grades, calendar, notebooks, archived classes and full histories were not exhaustively checked. This is live sample verification, not a completeness claim.

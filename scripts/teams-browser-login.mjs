@@ -5,7 +5,7 @@ import { teamsLiveConfig } from './teams-live-config.mjs';
 // Opens the actual browser integration for manual sign-in; no password/token APIs.
 const config = teamsLiveConfig();
 const client = new Client({ name: 'schoolwork-browser-login', version: '1' });
-const transport = new StdioClientTransport({ command: config.command, args: config.args, stderr: 'pipe' });
+const transport = new StdioClientTransport({ command: config.command, args: config.args.filter(arg => arg !== '--headless'), stderr: 'pipe' });
 transport.stderr?.resume();
 try {
   await client.connect(transport);

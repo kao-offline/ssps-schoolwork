@@ -8,7 +8,7 @@ export function teamsLiveConfig(root = resolve(import.meta.dirname, '..'), home 
   const privateRoot = process.env.SCHOOLWORK_DATA_DIR || join(home, '.ssps-schoolwork');
   return {
     command: process.execPath,
-    args: [join(root, 'node_modules/@playwright/mcp/cli.js'), '--browser', 'chrome',
+    args: [join(root, 'node_modules/@playwright/mcp/cli.js'), '--browser', 'chrome', '--headless',
       '--user-data-dir', join(privateRoot, 'teams-browser-profile'),
       '--output-dir', join(privateRoot, 'teams-browser-output'),
       '--file-paths', 'absolute', '--codegen', 'none', '--snapshot-mode', 'full', '--console-level', 'error'],
