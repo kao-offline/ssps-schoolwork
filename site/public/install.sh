@@ -9,7 +9,7 @@ if [ -e "$ssps_target" ]; then
   [ -d "$ssps_target/.git" ] || { printf '%s\n' 'Existing folder is not this repository. Nothing was overwritten.'; exit 1; }
   [ "$(git -C "$ssps_target" remote get-url origin)" = "$ssps_repo" ] || { printf '%s\n' 'Existing folder belongs to another repository.'; exit 1; }
   [ -z "$(git -C "$ssps_target" status --porcelain)" ] || { printf '%s\n' 'Local source changes exist. Run setup in the existing folder.'; exit 1; }
-  git -C "$ssps_target" pull --ff-only origin main
+  git -C "$ssps_target" pull --quiet --ff-only origin main
 else
   mkdir -p "$(dirname "$ssps_target")"
   git clone "$ssps_repo" "$ssps_target"

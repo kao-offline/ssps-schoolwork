@@ -9,7 +9,7 @@ test('published bootstrap scripts parse and protect existing installations', () 
     assert.ok(text.includes('https://github.com/kao-offline/ssps-schoolwork.git'));
     assert.ok(text.includes('remote get-url origin'));
     assert.ok(text.includes('status --porcelain'));
-    assert.ok(text.includes('pull --ff-only origin main'));
+    assert.ok(text.includes('pull --quiet --ff-only origin main'));
     assert.ok(!/reset --hard|git clean|Remove-Item|rm -rf/.test(text));
   }
   if (process.platform === 'win32') {

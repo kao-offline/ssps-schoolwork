@@ -13,7 +13,7 @@
     if ($LASTEXITCODE -ne 0 -or $SspsRemote -ne $SspsRepo) { throw 'Existing folder belongs to another repository. Nothing was overwritten.' }
     $SspsDirty = git -C $SspsTarget status --porcelain
     if ($LASTEXITCODE -ne 0 -or $SspsDirty) { throw 'Existing source has local changes. Commit them or install from your existing folder.' }
-    git -C $SspsTarget pull --ff-only origin main
+    git -C $SspsTarget pull --quiet --ff-only origin main
     if ($LASTEXITCODE -ne 0) { throw 'Update failed. Existing accounts and files were preserved.' }
   } else {
     $null = New-Item -ItemType Directory -Path (Split-Path $SspsTarget) -Force

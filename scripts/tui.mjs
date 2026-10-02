@@ -96,6 +96,11 @@ export function createTui() {
   return ui;
 }
 
+// Static recap that survives the alternate screen: call after stop().
+export function recap(lines) {
+  for (const [label, detail] of lines) console.log(`✓ ${label}${detail ? ` · ${detail}` : ''}`);
+}
+
 // Spawn with output captured into the dashboard log; failures dump the tail.
 export async function runTui(spawnFn, ui, command, parameters, { input, tail = 8, cwd } = {}) {
   return new Promise((resolveRun, reject) => {

@@ -3,7 +3,7 @@ import { copyFile, readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { join, resolve, dirname, delimiter } from 'node:path';
-import { createTui, runTui, tuiEnabled } from './tui.mjs';
+import { createTui, recap, runTui, tuiEnabled } from './tui.mjs';
 const root = resolve(import.meta.dirname, '..');
 const flags = process.argv.slice(2);
 const args = [`--env-file-if-exists=${join(root, '.env')}`];
@@ -100,6 +100,13 @@ async function demo() {
   }
   ui.ok(prepare, 'views ready');
   ui.stop();
+  recap([
+    ['[1/5] SETUP — dependencies', 'installed'],
+    ['[1/5] SETUP — local server', 'built'],
+    ['[2/5] CONNECT — readers + sign-in', 'connected'],
+    ['[3/5] AGENTS — servers + skills', 'Codex · Claude · Hermes'],
+    ['[4/5] PREPARE — initial cache', 'views ready'],
+  ]);
   console.log('[5/5] ASK — ready: 3 apps. Report: setup-report.local.json');
   console.log('New session: “Read my schoolwork context and help me plan this week.”');
 }

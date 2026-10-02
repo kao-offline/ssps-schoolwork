@@ -5,7 +5,7 @@ import { detectAgents, installAgent, serverEntries } from '../dist/setup-agents.
 import { cacheAuth, cacheRequest } from '../dist/teams-cache-client.js';
 import { warmCache } from '../dist/setup-warm.js';
 import { dataDir } from '../dist/config.js';
-import { createTui, runTui, tuiEnabled } from './tui.mjs';
+import { createTui, recap, runTui, tuiEnabled } from './tui.mjs';
 const root = resolve(import.meta.dirname, '..');
 const flags = process.argv.slice(2);
 const args = [`--env-file-if-exists=${join(root, '.env')}`];
@@ -134,6 +134,11 @@ async function main() {
   }
   await writeFile(join(root, 'setup-report.local.json'), JSON.stringify(localReport, null, 2) + '\n', { mode: 0o600 });
   ui?.stop();
+  if (ui) recap([
+    ['[2/5] CONNECT — readers + sign-in', flags.includes('--agents-only') ? 'skipped' : 'connected'],
+    ['[3/5] AGENTS — servers + skills', installedNames.length ? installedNames.join(' · ').slice(0, 52) : 'nothing detected'],
+    ['[4/5] PREPARE — initial cache', flags.includes('--agents-only') ? 'skipped' : warm.map(w => `${w.source} ${w.completed}/${w.required}`).join(' · ') || 'skipped'],
+  ]);
   console.log(`[5/5] ASK — ${failures.length ? 'needs attention' : 'ready'}: ${installed.length} apps. Report: setup-report.local.json`);
   console.log('New session: “Read my schoolwork context and help me plan this week.”');
   console.log('Skills: /class-schoolwork · /discord-context. Other clients: import mcp.local.json.');
