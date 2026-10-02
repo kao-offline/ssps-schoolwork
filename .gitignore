@@ -9,4 +9,5 @@ coverage/
 mcp.local.json
 mcp.teams-live.local.json
 mcp.discord-live.local.json
+setup-report.local.json
 .playwright-mcp/

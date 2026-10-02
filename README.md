@@ -6,15 +6,33 @@ Each student runs their own process and connects their own accounts. No shared c
 
 ## Install and connect
 
+Recommended setup: run one command in the cloned repository:
+
+```powershell
+node scripts/setup.mjs
+```
+
+Requires Git, Node.js 22.13+ with npm, and Google Chrome. Setup installs dependencies, builds, guides each student through their own Bakalari/Teams/Discord sign-in, starts background readers, detects supported agent apps, merges MCP entries and installs skills. Windows gets hidden startup. The default Teams browser flow needs no Microsoft app registration.
+
+For a complete first installation from PowerShell:
+
+```powershell
+& { git clone https://github.com/kao-offline/ssps-schoolwork.git; if ($LASTEXITCODE -ne 0) { throw "Clone failed" }; Set-Location ssps-schoolwork; node scripts/setup.mjs }
+```
+
+Use `--detect` to inspect clients, `--apps=hermes,codex,claude,grok` to select clients, `--sources=teams,bakalari` to omit Discord, or `--no-login` to reuse existing accounts. Start a new agent session afterward. See [all options, supported apps, backups and recovery](docs/one-command-setup.md).
+
+The API-only setup below is optional. Its Microsoft registration requirements apply to Graph, independently of the default browser integration. Use `npm run setup:config` for the older config-only generator.
+
 ```powershell
 npm ci
 npm run build
-npm run setup
+npm run setup:config
 ```
 
 Fill in `MICROSOFT_CLIENT_ID` in `.env` using a school-approved Microsoft Entra app registration. `MICROSOFT_TENANT_ID` can be the school's tenant ID, otherwise it defaults to `organizations`. The Bakaláři default is `https://bakalari.ssps.cz`.
 
-`npm run setup` preserves an existing `.env` and generates an ignored `mcp.local.json` with the actual Node executable and absolute project paths. Use its `mcpServers.schoolwork` entry in your client configuration.
+`npm run setup:config` preserves an existing `.env` and generates an ignored `mcp.local.json` with the actual Node executable and absolute project paths. Use its `mcpServers.schoolwork` entry in your client configuration.
 
 ```powershell
 npm run login:teams
@@ -74,7 +92,7 @@ args = ["--env-file-if-exists=C:/path/to/ssps-bak-a-teams/.env", "C:/path/to/ssp
 
 Copy `skills/class-schoolwork` to the agent's supported skill directory (for Codex, `~/.codex/skills/`). Clients without skills can use that file's body as their project instructions. The portable `plugin.json` and `mcp.json` also package the skill/server together for clients supporting Agent Plugins; `${PLUGIN_ROOT}` is a plugin-host placeholder, not a normal shell variable. Build and install dependencies before using the plugin folder.
 
-Hermes is configured on this computer's default Windows profile with 18 schoolwork MCP tools, eight live browser tools and the `class-schoolwork` skill. Start a new session and use `/class-schoolwork`. Live Teams uses a dedicated Chrome profile and ordinary Microsoft sign-in rather than our Graph app registration. See [live Teams setup and coverage](docs/teams-live-browser.md) and [installed paths and recovery](docs/hermes-setup.md). Graph consent remains separately blocked.
+The installer adds 24 schoolwork tools and eight shared browser tools per enabled browser source, plus `class-schoolwork` and `discord-context` skills where supported. Start a new session and use `/class-schoolwork`. Live Teams uses a dedicated Chrome profile and ordinary Microsoft sign-in rather than our Graph app registration. See [live Teams setup and coverage](docs/teams-live-browser.md) and [installed paths and recovery](docs/hermes-setup.md). Graph consent is separate.
 
 Try: “Find my projects due this week, read the attached requirements and relevant teacher replies, then help me start the programming project.”
 

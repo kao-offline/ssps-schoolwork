@@ -1,4 +1,4 @@
-param([switch]$RemoveStartup)
+param([switch]$RemoveStartup, [switch]$SkipTeams, [switch]$SkipDiscord)
 $ErrorActionPreference = 'Stop'
 $ContextRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $ContextNode = (Get-Command node -ErrorAction Stop).Source
@@ -20,7 +20,10 @@ if (!(Test-Path -LiteralPath $ContextWorker) -or !(Test-Path -LiteralPath $Conte
 if ((Test-Path -LiteralPath $ContextLauncher) -and !(Get-Content -LiteralPath $ContextLauncher -Raw).StartsWith("' SSPS local context watchers")) { throw 'Existing startup file is not owned by this installer.' }
 $ContextBaseCommand = '"' + $ContextNode + '" "--env-file-if-exists=' + (Join-Path $ContextRoot '.env') + '" "' + $ContextWorker + '"'
 $ContextScript = "' SSPS local context watchers`r`nSet shell = CreateObject(""WScript.Shell"")`r`n"
-foreach ($ContextSource in @('teams', 'discord')) {
+$ContextSources = @()
+if (!$SkipTeams) { $ContextSources += 'teams' }
+if (!$SkipDiscord) { $ContextSources += 'discord' }
+foreach ($ContextSource in $ContextSources) {
   $ContextCommand = $ContextBaseCommand + ' --source=' + $ContextSource
   $ContextScript += 'shell.Run "' + $ContextCommand.Replace('"', '""') + '", 0, False' + "`r`n"
   & $ContextNode "--env-file-if-exists=$(Join-Path $ContextRoot '.env')" $ContextControl setup "--source=$ContextSource"

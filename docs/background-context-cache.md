@@ -68,7 +68,7 @@ node --env-file-if-exists=.env dist/teams-cache-control.js resume --source=disco
 
 The login helper pauses/releases that source's shared browser before opening the visible sign-in window, then resumes it afterward. Don't run a separate direct Playwright client against an active worker's profile. `npm run logout` removes API credentials only; it does not sign out these browser profiles or delete cached context.
 
-Remove only the startup launcher with `powershell -NoProfile -File scripts/install-context-background.ps1 -RemoveStartup`, pause both workers, and restore the old direct-browser MCP configuration if rolling back. The former implementation is checkpoint `823112b`. Source remains local; no remote Git, PR or cloud deployment is configured.
+Remove only the startup launcher with `powershell -NoProfile -File scripts/install-context-background.ps1 -RemoveStartup`, pause both workers, and restore the old direct-browser MCP configuration if rolling back. The former implementation is checkpoint `823112b`. Public source is at [ssps-schoolwork](https://github.com/kao-offline/ssps-schoolwork); account data and the MCP services remain local. For classmates use the [one-command installer](one-command-setup.md).
 
 ## Local deployment record
 
