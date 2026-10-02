@@ -20,9 +20,10 @@ function run(command, parameters, input) {
 }
 
 async function main() {
+  if (flags.includes('--demo') && !flags.includes('--detect')) { await demo(); return; }
   if (Number(process.versions.node.split('.')[0]) < 22 || (Number(process.versions.node.split('.')[0]) === 22 && Number(process.versions.node.split('.')[1]) < 13)) throw new Error('Install Node.js 22.13 or later, then rerun setup.');
   if (flags.includes('--help')) {
-    console.log('node scripts/setup.mjs [--detect] [--agents-only] [--no-login] [--no-startup] [--apps=codex,claude,hermes] [--exclude=windsurf,kilo] [--sources=teams,bakalari,discord] [--cache-timeout=180]');
+    console.log('node scripts/setup.mjs [--detect] [--demo] [--agents-only] [--no-login] [--no-startup] [--apps=codex,claude,hermes] [--exclude=windsurf,kilo] [--sources=teams,bakalari,discord] [--cache-timeout=180]');
     return;
   }
   if (!flags.includes('--detect') && !flags.includes('--agents-only') && !flags.includes('--no-login') && !process.stdin.isTTY) throw new Error('Sign-in needs an interactive terminal. Run setup there, or use --no-login to reuse existing accounts.');
@@ -68,3 +69,37 @@ async function main() {
   await run(process.execPath, [...args, join(root, 'scripts/setup-runner.mjs'), ...flags]);
 }
 main().catch(error => { uiActive = false; ui?.stop(); console.error(error.message); process.exitCode = 1; });
+
+// Renders the full installer dashboard with fake progress. Changes nothing:
+// no installs, no builds, no writes, no logins.
+async function demo() {
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  if (!ui) { console.log('Demo needs an interactive terminal (TTY).'); return; }
+  const setup = ui.step('[1/5] SETUP — dependencies');
+  const build = ui.step('[1/5] SETUP — local server');
+  const connect = ui.step('[2/5] CONNECT — readers + sign-in');
+  const agents = ui.step('[3/5] AGENTS — servers + skills');
+  const prepare = ui.step('[4/5] PREPARE — initial cache');
+  ui.run(setup, 'locked install');
+  await sleep(900);
+  ui.ok(setup, 'installed');
+  ui.run(build, 'tsc');
+  await sleep(900);
+  ui.ok(build, 'built');
+  ui.run(connect, 'sign-in');
+  ui.log('Chrome is open — sign in to teams there (15 min max).');
+  await sleep(1200);
+  ui.ok(connect, 'connected');
+  ui.run(agents, 'merging configs');
+  await sleep(900);
+  ui.ok(agents, 'Codex · Claude · Hermes');
+  ui.run(prepare, 'warming views');
+  for (let done = 0; done <= 3; done++) {
+    ui.bar(done, 3, `teams · ${done * 9} records · ${done}s`);
+    await sleep(500);
+  }
+  ui.ok(prepare, 'views ready');
+  ui.stop();
+  console.log('[5/5] ASK — ready: 3 apps. Report: setup-report.local.json');
+  console.log('New session: “Read my schoolwork context and help me plan this week.”');
+}
