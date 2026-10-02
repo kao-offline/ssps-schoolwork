@@ -8,4 +8,5 @@ coverage/
 .schoolwork/
 mcp.local.json
 mcp.teams-live.local.json
+mcp.discord-live.local.json
 .playwright-mcp/

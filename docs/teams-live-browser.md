@@ -1,3 +1,5 @@
+> Current deployment uses the [shared background cache and browser proxy](background-context-cache.md). Do not start a separate direct browser against an active worker profile. The eight agent tools remain available through teams_live; cache reads are preferred. The older direct-browser implementation below is historical.
+
 # Live Teams in Hermes
 
 This mode uses Microsoft's Playwright MCP to read the ordinary Teams web app with a dedicated Chrome profile. Routine agent reads run headlessly, without opening or controlling your normal desktop browser. The login helper opens a visible dedicated window for manual sign-in. It does not use our Graph app registration. Microsoft sign-in, MFA, school access policies and document permissions still apply. The student signs in directly in Microsoft pages.

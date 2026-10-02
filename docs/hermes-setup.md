@@ -6,10 +6,10 @@ Configured and verified on 2026-10-02 for the local Windows Hermes default profi
 
 - Hermes executable: C:/Users/hrdyk/AppData/Local/hermes/hermes-agent/venv/Scripts/hermes.exe.
 - Actual Hermes home: C:/Users/hrdyk/AppData/Local/hermes (not ~/.hermes on this installation).
-- Config: C:/Users/hrdyk/AppData/Local/hermes/config.yaml, mcp_servers.schoolwork, enabled=true, all 18 tools enabled; mcp_servers.teams_live enables eight browser tools.
+- Config: C:/Users/hrdyk/AppData/Local/hermes/config.yaml, mcp_servers.schoolwork, enabled=true, all 24 tools enabled; mcp_servers.teams_live and mcp_servers.discord_live each enable eight shared-browser tools.
 - Node command: C:/Program Files/nodejs/node.exe.
 - Arguments: --env-file-if-exists=C:/Users/hrdyk/Documents/PROJEKTY-MOJE/ssps-bak-a-teams/.env and C:/Users/hrdyk/Documents/PROJEKTY-MOJE/ssps-bak-a-teams/dist/index.js.
-- Installed skill: C:/Users/hrdyk/AppData/Local/hermes/skills/class-schoolwork/SKILL.md, byte-for-byte verified against the repository skill.
+- Installed skills: class-schoolwork and discord-context. Schoolwork skill: C:/Users/hrdyk/AppData/Local/hermes/skills/class-schoolwork/SKILL.md, byte-for-byte verified against the repository skill.
 
 The absolute paths work independently of the session's working folder. This setup applies to the default profile; named profiles, other computers and other Windows users need their own configuration/accounts. Custom tool filters can exclude schoolwork even though it is enabled globally.
 
@@ -31,7 +31,15 @@ npm run import:teams -- "C:/path/to/teams-capture.json"
 
 The capture tools read those imported partial snapshots. Microsoft API consent remains blocked; configuring Hermes does not grant it. At verification time there were no imported captures. Bakalari remains connected and available live.
 
-## Verification and recovery
+## Background cache verification
+
+The shared workers run headlessly on loopback ports 38671 (Teams) and 38672 (Discord). The per-user Startup launcher SSPSContextCache.vbs restarts them invisibly at Windows sign-in. New Hermes sessions share these workers instead of competing for browser profiles. Use `/discord-context` for Discord and `/class-schoolwork` for schoolwork; both prefer cache reads. [Routes, polling, freshness, limits and recovery](background-context-cache.md).
+
+A fresh installed Hermes runtime discovered 24 + 8 + 8 tools, read real Discord cached messages, and checked both workers with no authentication failure or route errors at the verification sample. Twenty-five warm searches per source measured median 9.18 ms / p95 11.99 ms for Teams and median 8.10 ms / p95 10.92 ms for Discord. These are local sample measurements, not guaranteed latency. Both sources were still prefetching. The Discord queue contained more than 280 discovered routes; discovery and visible message caching are partial coverage, not a full history archive.
+
+The previous Hermes config was encrypted and verified using Windows DPAPI at config.context-cache-before-20261002.dpapi. Both repository skills were copied and byte-for-byte verified in Hermes. No provider settings were intentionally changed.
+
+## Earlier verification and recovery
 
 The initial schoolwork installation used real Hermes discovery: 17 tools, the installed skill and a live 19-subject Bakalari collection were verified. The live-browser addition subsequently used Hermes's native discovery/save functions: the Playwright MCP advertised 25 tools and all eight requested tools were present before the filtered connection was saved. The schoolwork server now adds the eighteenth tool, read_downloaded_teams_document. Tool discovery alone does not establish account access; the subsequent live checks below verified it separately. No paid model chat was run.
 

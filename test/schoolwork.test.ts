@@ -183,7 +183,7 @@ test('MCP tools integrate with paginated Graph and Bakalari fixtures and reject 
     return JSON.parse((result.content as { text: string }[])[0].text).data;
   }
   try {
-    assert.equal((await client.listTools()).tools.length, 18);
+    assert.equal((await client.listTools()).tools.length, 24);
     const works = await call('list_schoolwork', { source: 'teams', classId: 'c', from: '2026-10-03', to: '2026-10-03' });
     assert.equal(works.items.length, 1); // Prague deadline crosses midnight from UTC.
     assert.equal(works.items[0].id, 'a');
@@ -251,7 +251,7 @@ test('built server starts over stdio and gives actionable disconnected status wi
   try {
     await client.connect(transport);
     const tools = await client.listTools();
-    assert.equal(tools.tools.length, 18);
+    assert.equal(tools.tools.length, 24);
     const result = await client.callTool({ name: 'connection_status', arguments: {} });
     const data = JSON.parse((result.content as { text: string }[])[0].text).data;
     assert.equal(data.teams.connected, false);
