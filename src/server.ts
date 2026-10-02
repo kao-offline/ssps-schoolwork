@@ -7,6 +7,7 @@ import { microsoftToken, bakToken } from './auth.js';
 import { bakBase } from './config.js';
 import { createHash } from 'node:crypto';
 import { readWebArea, webAreas } from './bakalari-web.js';
+import { listCaptures, readCapture } from './teams-captures.js';
 
 const id = z.string().min(1).max(2048);
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => { const parsed = new Date(value); return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value; }, 'Use a valid YYYY-MM-DD date.');
@@ -44,6 +45,14 @@ export function createServer() {
       }
     });
   }
+  tool('list_captured_teams_context', 'Search user-imported Teams/SharePoint/OneNote text snapshots. This is offline partial context, not live Microsoft connectivity. Import through the local CLI first. Search matches captured text and title.', { query, ...paging }, async ({ query, offset, limit }) => {
+    const result = await listCaptures(query);
+    return { ...window(result.items, offset, limit), incomplete: result.incomplete, live: false };
+  });
+  tool('read_captured_teams_context', 'Read an imported partial Teams snapshot, including source page, capture time and age. Dates/instructions remain source text, not normalized assignment records. Use nextOffset and expectedContentHash for coherent JSON chunks. Recapture to refresh; missing content does not mean no homework.', { captureId: z.string().regex(/^[a-f0-9]{64}$/), ...chunks }, async ({ captureId, offset, maxCharacters, expectedContentHash }) => {
+    const { ageHours, ...capture } = await readCapture(captureId);
+    return { live: false, ageHours, ...jsonChunk(capture, offset, maxCharacters, expectedContentHash) };
+  });
   tool('connection_status', 'Check live Microsoft and Bakalari account connectivity independently.', {}, async () => {
     const result = await Promise.allSettled([microsoftToken().then(() => teams.graph('/me?$select=id,displayName')), bakToken().then(() => bak.bak('user'))]);
     return Object.fromEntries(result.map((r, index) => [index === 0 ? 'teams' : 'bakalari', { connected: r.status === 'fulfilled', ...(r.status === 'rejected' ? { error: r.reason instanceof Error ? r.reason.message : 'Connection failed.' } : {}) }]));

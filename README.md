@@ -28,6 +28,8 @@ On Windows, token files under `~/.ssps-schoolwork` are encrypted using Windows D
 
 ## Microsoft app setup
 
+If Microsoft consent is blocked, a partial offline route is available: load the local browser extension in `browser/teams-capture`, manually open the relevant Teams page, export its rendered text, then run `npm run import:teams -- "C:/path/to/capture.json"`. Agents can search/read imported snapshots with `list_captured_teams_context` and `read_captured_teams_context`. This requests no Microsoft API consent and controls no desktop or navigation. Browser policy must allow the extension. It is not a live Teams connection or complete sync; attachments and unloaded/embedded content can be absent. See [setup, investigated alternatives and feature map](docs/teams-access-and-features.md).
+
 The school IT administrator may need to register or approve the app in Entra. Configure a public client supporting device-code flow (Authentication → allow public client flows). No client secret is needed. Request delegated read permissions:
 
 | Permission | Purpose |
@@ -77,6 +79,8 @@ Try: “Find my projects due this week, read the attached requirements and relev
 ## Tools and coverage
 
 `connection_status`, `list_classes`, `list_channels`, `list_schoolwork`, `get_assignment`, `list_announcements`, `get_thread`, `get_bakalari_message`, `bakalari_capabilities`, `list_bakalari_subjects`, `list_bakalari_lesson_topics`, `read_bakalari_data`, `read_bakalari_web`, `resolve_document_link`, `read_document`.
+
+Offline fallback tools: `list_captured_teams_context`, `read_captured_teams_context`. Snapshots carry capture time, age, source page and partial-scope metadata. Original exports are plaintext; imported copies use the existing protected local store. `logout` removes account credentials only; captures persist separately.
 
 Bakaláři additionally exposes marks and historical report cards, absences, subject/teacher information, recorded lesson topics/descriptions, actual/permanent timetables with lesson content/plan fields, substitutions, events, profile, consents and account-permitted modules. Sent messages are supported as well as received messages and noticeboard posts. `bakalari_capabilities` discovers rights; `probe=true` verifies the read API areas live. See [verified coverage and permission limits](docs/bakalari-coverage.md).
 
