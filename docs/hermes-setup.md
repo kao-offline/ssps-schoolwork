@@ -6,7 +6,7 @@ Configured and verified on 2026-10-02 for the local Windows Hermes default profi
 
 - Hermes executable: C:/Users/hrdyk/AppData/Local/hermes/hermes-agent/venv/Scripts/hermes.exe.
 - Actual Hermes home: C:/Users/hrdyk/AppData/Local/hermes (not ~/.hermes on this installation).
-- Config: C:/Users/hrdyk/AppData/Local/hermes/config.yaml, mcp_servers.schoolwork, enabled=true, all 17 tools enabled.
+- Config: C:/Users/hrdyk/AppData/Local/hermes/config.yaml, mcp_servers.schoolwork, enabled=true, all 18 tools enabled; mcp_servers.teams_live enables eight browser tools.
 - Node command: C:/Program Files/nodejs/node.exe.
 - Arguments: --env-file-if-exists=C:/Users/hrdyk/Documents/PROJEKTY-MOJE/ssps-bak-a-teams/.env and C:/Users/hrdyk/Documents/PROJEKTY-MOJE/ssps-bak-a-teams/dist/index.js.
 - Installed skill: C:/Users/hrdyk/AppData/Local/hermes/skills/class-schoolwork/SKILL.md, byte-for-byte verified against the repository skill.
@@ -21,7 +21,9 @@ Start Hermes normally and send:
 
 Hermes discovers the MCP tools with names such as mcp__schoolwork__connection_status and mcp__schoolwork__list_bakalari_subjects. The portable skill uses their base names. You can also ask for schoolwork naturally; the skill is discoverable on demand. An already-running session may need a new session or /reload-mcp and /reload-skills.
 
-For Teams without Graph consent, first export a capture using browser/teams-capture and import it from the repository:
+For live Teams without our Graph app consent, complete `npm run login:teams-browser` and use the [live browser workflow](teams-live-browser.md). The current blocker is manual Microsoft sign-in/MFA; school content has not yet been verified through this browser. The default Hermes profile is configured to reuse its dedicated Chrome profile in new sessions.
+
+For an optional offline fallback, export a capture using browser/teams-capture and import it from the repository:
 
 ```powershell
 npm run import:teams -- "C:/path/to/teams-capture.json"
@@ -31,9 +33,13 @@ The capture tools read those imported partial snapshots. Microsoft API consent r
 
 ## Verification and recovery
 
-hermes mcp add performed real discovery and saved the connection using Hermes's own CLI. hermes mcp test schoolwork connected and discovered 17 tools. A separate fresh Python process using the installed Hermes runtime discovered/registered all 17 namespaced tools, listed and loaded the skill, dispatched connection_status, retrieved the 19-subject Bakalari collection and searched the empty capture collection. Default CLI platform settings include schoolwork. This verifies discovery and tool execution without making a paid model request; an AI-generated end-to-end chat was not run.
+The initial schoolwork installation used real Hermes discovery: 17 tools, the installed skill and a live 19-subject Bakalari collection were verified. The live-browser addition subsequently used Hermes's native discovery/save functions: the Playwright MCP advertised 25 tools and all eight requested tools were present before the filtered connection was saved. The schoolwork server now adds the eighteenth tool, read_downloaded_teams_document. Browser school content must be checked after the student's sign-in; tool discovery alone does not establish account access. No paid model chat was run.
+
+A fresh Hermes runtime then registered exactly 18 schoolwork tools and eight filtered browser tools, dispatched connection_status (Bakalari connected, Graph disconnected) and verified the installed skill matches the repository. The actual installed Chrome MCP passed a separate local fixture test for navigation, inline snapshots, persistent synthetic sign-in across new processes, resource download and document extraction. The full repository check passed all 16 tests; dependency audit reported zero vulnerabilities. These checks do not establish access to this student's live Teams classes. The first 15-minute school login attempt timed out while Microsoft sign-in/MFA was pending; it was reopened using the same profile.
 
 Before the config change, the entire original config was encrypted with Windows DPAPI to C:/Users/hrdyk/AppData/Local/hermes/config.schoolwork-before-20261002.dpapi. Decryption was verified byte-for-byte. The backup is local and readable only through DPAPI by this Windows user. Do not upload config, its backup, school tokens or capture files.
+
+Before adding live Teams, the existing config was also encrypted and byte-for-byte verified at config.teams-live-before-20261002.dpapi in the same Hermes home. Disable just the browser connection with hermes mcp remove teams_live if needed.
 
 For a narrow rollback, use hermes mcp remove schoolwork and remove only the installed class-schoolwork skill you no longer want. Avoid restoring the entire old config after unrelated settings change. Repository recovery point: cea3d97, before this setup documentation. The project remains a local stdio service; no remote endpoint, Git remote, PR or remote CI exists.
 

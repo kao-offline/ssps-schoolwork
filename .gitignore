@@ -7,3 +7,5 @@ dist/
 coverage/
 .schoolwork/
 mcp.local.json
+mcp.teams-live.local.json
+.playwright-mcp/

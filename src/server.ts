@@ -8,6 +8,7 @@ import { bakBase } from './config.js';
 import { createHash } from 'node:crypto';
 import { readWebArea, webAreas } from './bakalari-web.js';
 import { listCaptures, readCapture } from './teams-captures.js';
+import { readTeamsDownload } from './teams-downloads.js';
 
 const id = z.string().min(1).max(2048);
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => { const parsed = new Date(value); return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value; }, 'Use a valid YYYY-MM-DD date.');
@@ -53,7 +54,8 @@ export function createServer() {
     const { ageHours, ...capture } = await readCapture(captureId);
     return { live: false, ageHours, ...jsonChunk(capture, offset, maxCharacters, expectedContentHash) };
   });
-  tool('connection_status', 'Check live Microsoft and Bakalari account connectivity independently.', {}, async () => {
+  tool('read_downloaded_teams_document', 'Extract a file downloaded by the live Teams browser: PDF, DOCX, PPTX or text. file is relative to the private Teams browser output directory; arbitrary local files/symlink escapes are blocked. This does not require Graph consent. Cite the original browser resource separately; filesystem modification time is not a teacher revision date.', { file: z.string().min(1).max(2048), offset: z.number().int().min(0).default(0), maxCharacters: z.number().int().min(100).max(50000).default(20000) }, async ({ file, offset, maxCharacters }) => documentWindow(await readTeamsDownload(file), offset, maxCharacters));
+  tool('connection_status', 'Check live Microsoft Graph and Bakalari API account connectivity independently. Teams browser sign-in is checked through the separate teams_live browser tools, not this Graph status.', {}, async () => {
     const result = await Promise.allSettled([microsoftToken().then(() => teams.graph('/me?$select=id,displayName')), bakToken().then(() => bak.bak('user'))]);
     return Object.fromEntries(result.map((r, index) => [index === 0 ? 'teams' : 'bakalari', { connected: r.status === 'fulfilled', ...(r.status === 'rejected' ? { error: r.reason instanceof Error ? r.reason.message : 'Connection failed.' } : {}) }]));
   });

@@ -74,7 +74,7 @@ args = ["--env-file-if-exists=C:/path/to/ssps-bak-a-teams/.env", "C:/path/to/ssp
 
 Copy `skills/class-schoolwork` to the agent's supported skill directory (for Codex, `~/.codex/skills/`). Clients without skills can use that file's body as their project instructions. The portable `plugin.json` and `mcp.json` also package the skill/server together for clients supporting Agent Plugins; `${PLUGIN_ROOT}` is a plugin-host placeholder, not a normal shell variable. Build and install dependencies before using the plugin folder.
 
-Hermes is configured on this computer's default Windows profile with all 17 MCP tools and the `class-schoolwork` skill. Start a new session and use `/class-schoolwork`. See [installed paths, verification and recovery](docs/hermes-setup.md). This setup preserves the Teams consent/capture limits described above.
+Hermes is configured on this computer's default Windows profile with 18 schoolwork MCP tools, eight live browser tools and the `class-schoolwork` skill. Start a new session and use `/class-schoolwork`. Live Teams uses a dedicated Chrome profile and ordinary Microsoft sign-in rather than our Graph app registration. See [live Teams setup and coverage](docs/teams-live-browser.md) and [installed paths and recovery](docs/hermes-setup.md). Graph consent remains separately blocked.
 
 Try: “Find my projects due this week, read the attached requirements and relevant teacher replies, then help me start the programming project.”
 

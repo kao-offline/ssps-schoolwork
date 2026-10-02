@@ -1,5 +1,7 @@
 # Teams access routes and feature map
 
+The user subsequently authorized live automation. The selected route is now the dedicated Chrome integration described in [Live Teams in Hermes](teams-live-browser.md). The extension and feature map below document the earlier offline fallback; they do not describe the live browser's capabilities. Live school data still requires completing Microsoft sign-in and verifying the actual account views.
+
 Investigated 2026-10-02. The connected student reported administrator approval on the Graph PowerShell sign-in attempt, which requested only User.Read. The process then exited with an EventSource listener error. No Teams API data was retrieved. Opening the ordinary Teams web app in the shared browser reached /error/eoa; page snapshots failed twice. This is not evidence that Teams is disabled for the account or that its class data is empty.
 
 ## Route implemented without Microsoft API consent
