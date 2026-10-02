@@ -48,10 +48,19 @@ export class TeamsBrowser {
   }
   async tools() { return (await (await this.connect()).listTools()).tools.filter(tool => browserTools.includes(tool.name)); }
   async call(name: string, args: Record<string, unknown> = {}) {
-    await this.connect();
-    const result = await this.client!.callTool({ name, arguments: args });
-    if (name === 'browser_close') this.started = false;
-    return result;
+    // ponytail: one reconnect, not a loop — a second Chrome on this profile kills the first; retrying forever would just fight it.
+    try {
+      await this.connect();
+      const result = await this.client!.callTool({ name, arguments: args });
+      if (name === 'browser_close') this.started = false;
+      return result;
+    } catch (error) {
+      if (name === 'browser_close' || !/has been closed|connection closed|browser has disconnected/i.test(error instanceof Error ? error.message : '')) throw error;
+      await this.close();
+      await this.connect();
+      const result = await this.client!.callTool({ name, arguments: args });
+      return result;
+    }
   }
   async text(name: string, args: Record<string, unknown> = {}) {
     const result = await this.call(name, args);

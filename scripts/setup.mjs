@@ -38,15 +38,15 @@ async function main() {
   if (!installed || oldFingerprint && oldFingerprint !== fingerprint) {
     if (!npmCli) throw new Error('npm is required. Run this command using npm run setup.');
     if (existsSync(join(root, 'dist/teams-cache-client.js'))) await run(process.execPath, [...args, join(root, 'scripts/setup-stop-workers.mjs')]);
-    console.log('[1/5] Installing the locked dependencies...');
+    console.log('[1/5] SETUP — installing locked dependencies...');
     // npm ci removes the whole tree; open agent MCP sessions can lock native DLLs.
-    await run(process.execPath, [npmCli, existsSync(join(root, 'node_modules')) ? 'install' : 'ci', '--no-fund']);
-  } else console.log('[1/5] Dependencies are already current.');
+    await run(process.execPath, [npmCli, existsSync(join(root, 'node_modules')) ? 'install' : 'ci', '--no-fund', '--no-audit', '--loglevel=error']);
+  } else console.log('[1/5] SETUP — dependencies already current.');
   await writeFile(stamp, fingerprint);
   if (!flags.includes('--agents-only') && !flags.includes('--detect') || !existsSync(join(root, 'dist/setup-agents.js'))) {
     if (!npmCli) throw new Error('npm is required to build. Run this command using npm run setup.');
-    console.log('[1/5] Building the local server...');
-    await run(process.execPath, [npmCli, 'run', 'build']);
+    console.log('[1/5] SETUP — building local server...');
+    await run(process.execPath, [npmCli, 'run', 'build', '--silent']);
   }
   if (!flags.includes('--detect') && !existsSync(join(root, '.env'))) await copyFile(join(root, '.env.example'), join(root, '.env'));
   // Start a new Node process so .env is loaded before importing account/store modules.

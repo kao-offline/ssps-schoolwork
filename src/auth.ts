@@ -1,33 +1,8 @@
-import { PublicClientApplication } from '@azure/msal-node';
-import { scopes, bakBase, bakHeaders } from './config.js';
+import { bakBase, bakHeaders } from './config.js';
 import { loadSecret, saveSecret } from './store.js';
 import { request } from './http.js';
 
-export async function microsoftApp() {
-  const clientId = process.env.MICROSOFT_CLIENT_ID;
-  if (!clientId) throw new Error('Set MICROSOFT_CLIENT_ID and run npm run login:teams locally.');
-  const tenant = process.env.MICROSOFT_TENANT_ID || 'organizations';
-  if (!/^[a-zA-Z0-9.-]+$/.test(tenant)) throw new Error('Invalid Microsoft tenant ID.');
-  const app = new PublicClientApplication({ auth: { clientId, authority: `https://login.microsoftonline.com/${tenant}` }, cache: { cachePlugin: {
-    beforeCacheAccess: async context => {
-      const cache = await loadSecret<{ clientId: string; tenant: string; cache: string }>('microsoft');
-      if (cache?.clientId === clientId && cache.tenant === tenant) context.tokenCache.deserialize(cache.cache);
-    },
-    afterCacheAccess: async context => {
-      if (context.cacheHasChanged) await saveSecret('microsoft', { clientId, tenant, cache: context.tokenCache.serialize() });
-    },
-  } } });
-  return app;
-}
-export async function microsoftToken() {
-  const app = await microsoftApp();
-  const accounts = await app.getTokenCache().getAllAccounts();
-  if (accounts.length !== 1) throw new Error('Run npm run login:teams locally to connect one student account.');
-  try {
-    const result = await app.acquireTokenSilent({ account: accounts[0], scopes });
-    return result.accessToken;
-  } catch { throw new Error('Microsoft sign-in needs attention. Run npm run login:teams locally; school IT may need to approve permissions.'); }
-}
+// ponytail: Teams reads through dedicated Chrome + local cache, so no Microsoft API auth lives here.
 type BakCredentials = { base: string; accessToken: string; refreshToken: string; expiresAt: number };
 export async function bakLogin(parameters: Record<string, string>) {
   const base = bakBase();

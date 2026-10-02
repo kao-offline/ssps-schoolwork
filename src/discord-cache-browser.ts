@@ -53,14 +53,15 @@ export function discordDiscovered(dom: Pick<DiscordDom, 'links' | 'guilds'>): Ro
   for (const link of dom.links) {
     try {
       const channel = discordChannel('https://discord.com' + link.path);
-      routes.set(channel.id, { ...channel, title: link.title.trim() || channel.id, intervalMs: 60000 });
+      // ponytail: 5-minute poll — 60s never drains with hundreds of channels, so everything read stale.
+      routes.set(channel.id, { ...channel, title: link.title.trim() || channel.id, intervalMs: 300000 });
     } catch { /* Only channel/DM links are eligible, never arbitrary URLs. */ }
   }
   return [...routes.values()];
 }
 export function discordChannel(url: string) {
   const parsed = new URL(url);
-  if (parsed.origin !== 'https://discord.com' || parsed.search || parsed.hash || !/^\/channels\/(?:@me|\d{8,24})\/\d{8,24}\/?$/.test(parsed.pathname)) throw new Error('Use the clean discord.com/channels/server/channel URL of an accessible channel or DM.');
+  if (parsed.origin !== 'https://discord.com' || parsed.search || parsed.hash || !/^\/channels\/(?:@me|\d{8,24})\/\d{8,24}(?:\/\d{8,24})?\/?$/.test(parsed.pathname)) throw new Error('Use a discord.com/channels/server/channel URL of an accessible channel or DM. Thread links work too; the thread itself is watched.');
   return { id: 'discord' + parsed.pathname.replace(/\/$/, ''), url: parsed.origin + parsed.pathname.replace(/\/$/, ''), kind: parsed.pathname.includes('/@me/') ? 'dm' as const : 'channel' as const };
 }
 export class DiscordBrowser extends TeamsBrowser {

@@ -12,7 +12,7 @@ import { loadSecret, saveSecret } from './store.js';
 async function saveWatchedRoutes(routes: Route[]) { await saveSecret('discord-watched-routes', routes); }
 async function loadWatchedRoutes() {
   const routes = await loadSecret<Route[]>('discord-watched-routes') || [];
-  return routes.filter(route => typeof route.id === 'string' && route.id.startsWith('discord/') && route.url && /^https:\/\/discord\.com\/channels\/(?:@me|\d{8,24})(?:\/\d{8,24})?$/.test(route.url) && Number.isFinite(route.intervalMs) && route.intervalMs >= 30000).slice(0, 2000);
+  return routes.filter(route => typeof route.id === 'string' && route.id.startsWith('discord/') && route.url && /^https:\/\/discord\.com\/channels\/(?:@me|\d{8,24})(?:\/\d{8,24}){1,2}$/.test(route.url) && Number.isFinite(route.intervalMs) && route.intervalMs >= 30000).slice(0, 2000);
 }
 
 export class BackgroundTeams {
@@ -70,14 +70,18 @@ export class BackgroundTeams {
             newNotification = newNotification && (JSON.parse(observation.text).unread || []).some((label: string) => !oldUnread.has(label));
           }
           if (['activity', 'notifications'].includes(observation.kind) && newNotification) {
+            // ponytail: no blanket invalidate — one new message must not requeue the whole backlog and keep everything stale.
             this.lastActivityChangeAt = new Date(this.now()).toISOString();
-            this.cache.invalidate(entry => !['activity', 'notifications', 'classes'].includes(entry.kind));
-            for (const candidate of this.routes.values()) if (!['activity', 'notifications', 'classes'].includes(candidate.kind)) { this.requested.add(candidate.id); this.nextCheck.set(candidate.id, 0); }
             if (this.source === 'teams') this.urgent.add('assignments/upcoming');
           }
         }
         let routesChanged = false;
-        for (const discovered of result.discovered) if (!this.routes.has(discovered.id) && this.routes.size < (this.source === 'discord' ? 2000 : 200)) { this.routes.set(discovered.id, discovered); this.requested.add(discovered.id); routesChanged = true; }
+        // ponytail: detail routes refresh on demand — auto-queueing every assignment/document keeps the whole cache stale.
+        for (const discovered of result.discovered) if (!this.routes.has(discovered.id) && this.routes.size < (this.source === 'discord' ? 2000 : 200)) {
+          this.routes.set(discovered.id, discovered);
+          if (!['assignment', 'document'].includes(discovered.kind)) this.requested.add(discovered.id);
+          routesChanged = true;
+        }
         if (this.source === 'discord' && routesChanged) await saveWatchedRoutes([...this.routes.values()]);
         this.authenticationUnavailable = false;
         this.errors.delete(route.id);
@@ -125,10 +129,11 @@ export class BackgroundTeams {
     if (method === 'tools') return this.browser.tools();
     if (method === 'browser') {
       const args = z.object({ name: z.enum(browserTools as [string, ...string[]]), arguments: z.record(z.string(), z.unknown()).default({}) }).parse(input);
-      this.leaseUntil = this.now() + 60000;
+      // ponytail: short lease so a live browser session never starves the worker; 20s covers snapshot cadence.
+      this.leaseUntil = this.now() + 20000;
       return this.queue.run(async () => {
         const result = await this.browser.call(args.name, args.arguments);
-        this.leaseUntil = args.name === 'browser_close' ? 0 : this.now() + 60000;
+        this.leaseUntil = args.name === 'browser_close' ? 0 : this.now() + 20000;
         return result;
       });
     }

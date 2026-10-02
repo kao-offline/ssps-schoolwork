@@ -20,13 +20,13 @@ An empty cache is incomplete evidence. Failed checks preserve last-good records 
 | Teams upcoming assignments | Read list and discover detail routes | 5 minutes |
 | Teams past-due assignments | Read loaded list | 15 minutes |
 | Teams classes | Discover class announcement routes | 30 minutes |
-| Teams class announcements / assignment details | Prefetch loaded posts, instructions, deadlines and resource names | 15 minutes |
+| Teams class announcements | Prefetch loaded posts | 15 minutes; assignment details refresh on demand |
 | Teams documents | Download/extract permitted PDF/DOCX/PPTX/text resources | First read, invalidation, or one-hour fallback |
 | Discord server/DM navigation | Discover joined servers and exposed channel/DM links | 10 minutes |
 | Discord unread/mention indicators | Check the current app without leaving its conversation | 30 seconds |
-| Discord channel/DM messages | Capture visible message IDs, text, times and message links; merge newer versions | One minute |
+| Discord channel/DM messages | Capture visible message IDs, text, times and message links; merge newer versions | 5 minutes |
 
-Notification checks have priority over routine warming. A detected change invalidates relevant cached context and queues rereads. Explicit single-route refreshes also take priority. Periodic rereads catch edits that produce no notification. Hash checks mean "the rendered content checked by this recipe was unchanged," not a server-wide revision guarantee or Graph delta API.
+Notification checks have priority over routine warming. A detected change records the activity time and queues the Teams upcoming-assignments reread; it no longer invalidates and requeues the whole backlog, which kept every record stale. Explicit single-route refreshes also take priority, and assignment/document details refresh on demand rather than all at once. Periodic rereads catch edits that produce no notification. Hash checks mean "the rendered content checked by this recipe was unchanged," not a server-wide revision guarantee.
 
 An in-page MutationObserver buffers rendered alerts/toasts between polls, including notices that disappear before the next snapshot. It reads DOM text only, never cookies, browser storage or account tokens. This captures web-app notices; it does not monitor Windows notification history or other desktop apps. Full page navigation can discard an observer buffer, and virtualized/unloaded content can be absent. Teams Activity and Discord unread indicators remain the fallback.
 
@@ -34,7 +34,7 @@ The intervals are minimum spacing, not hard deadlines. Browser loading, a large 
 
 ## Discord scope and history
 
-This student's selected scope is all accessible servers and DMs. Discovery uses the ordinary signed-in Discord web interface. The desktop app's credentials are not copied. Each discovered channel is read with the account's existing permissions. `watch_discord_channel` can add a clean channel/DM URL explicitly. The reader does not send messages, react, edit/delete, join servers or calls, or change settings.
+This student's selected scope is all accessible servers and DMs. Discovery uses the ordinary signed-in Discord web interface. The desktop app's credentials are not copied. Each discovered channel is read with the account's existing permissions. `watch_discord_channel` can add a channel, DM or thread URL explicitly. The reader does not send messages, react, edit/delete, join servers or calls, or change settings.
 
 The cache retains up to 500 observed messages per conversation and 2,000 records / 32 MiB of text per source. Older records can be evicted. Edits to observed IDs replace their cached text. Messages absent from the current virtualized view are retained as previously observed; absence is not proof of deletion. Closed DMs, collapsed channel categories, archived threads, forum indexes and unloaded scroll history may require additional UI discovery. It is not a complete Discord archive. Voice/video media and attachment binaries are not prefetched by this message reader.
 

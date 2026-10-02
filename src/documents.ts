@@ -3,8 +3,7 @@ import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { unzipSync, strFromU8 } from 'fflate';
 import { XMLParser } from 'fast-xml-parser';
 import { convert } from 'html-to-text';
-import { boundedBytes, request } from './http.js';
-import { fileMetadata } from './teams.js';
+import { boundedBytes } from './http.js';
 import { attachment } from './bakalari.js';
 
 export type DocumentPart = { reference: string; text: string };
@@ -59,17 +58,6 @@ function checkArchive(bytes: Buffer) {
     return true;
   } });
   return files;
-}
-export async function readTeamsDocument(driveId: string, itemId: string) {
-  const item = await fileMetadata(driveId, itemId);
-  const download = item['@microsoft.graph.downloadUrl'];
-  if (typeof download !== 'string') throw new Error('This item is not a downloadable file.');
-  const url = new URL(download);
-  if (url.protocol !== 'https:' || url.username || url.password || !(/(^|\.)sharepoint\.com$/.test(url.hostname) || /(^|\.)onedrive\.com$/.test(url.hostname) || /(^|\.)1drv\.com$/.test(url.hostname))) throw new Error('Microsoft returned an unsupported download host.');
-  // Preauthenticated URL is never returned to the agent or sent an OAuth token.
-  const response = await request(url.href, {}, 'Microsoft document');
-  const parts = await extract(await boundedBytes(response), item.name, item.file?.mimeType || response.headers.get('content-type') || '');
-  return { name: item.name, sourceUrl: item.webUrl, modifiedAt: item.lastModifiedDateTime, parts };
 }
 export async function readBakDocument(id: string) {
   const response = await attachment(id);

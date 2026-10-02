@@ -54,7 +54,8 @@ export class TeamsCache {
   }
   freshness(entry: CacheEntry, pending = false, offline = false) {
     const ageSeconds = Math.max(0, (this.now() - Date.parse(entry.checkedAt)) / 1000);
-    const ttl = ['activity', 'notifications'].includes(entry.kind) ? 90 : entry.kind === 'classes' ? 1800 : entry.kind === 'assignments' ? 300 : entry.kind === 'document' ? 3600 : ['dm', 'channel'].includes(entry.kind) ? 120 : 900;
+    // ponytail: TTLs sit ~1.5x above each kind's poll interval so an on-schedule route reads fresh.
+    const ttl = ['activity', 'notifications'].includes(entry.kind) ? 90 : entry.kind === 'classes' ? 2400 : ['assignments', 'assignment'].includes(entry.kind) ? 450 : entry.kind === 'document' ? 3600 : ['dm', 'channel'].includes(entry.kind) ? 450 : 1200;
     return { checkedAt: entry.checkedAt, changedAt: entry.changedAt, ageSeconds, stale: offline || !!entry.invalidatedAt || ageSeconds > ttl, refreshPending: pending, coverage: 'loaded UI content; partial, not a complete account sync', liveRequest: false };
   }
   search(query = '', kind?: CacheKind, limit = 30, pending = false, offline = false, offset = 0) {

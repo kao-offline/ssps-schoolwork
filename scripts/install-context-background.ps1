@@ -26,7 +26,7 @@ if (!$SkipDiscord) { $ContextSources += 'discord' }
 foreach ($ContextSource in $ContextSources) {
   $ContextCommand = $ContextBaseCommand + ' --source=' + $ContextSource
   $ContextScript += 'shell.Run "' + $ContextCommand.Replace('"', '""') + '", 0, False' + "`r`n"
-  & $ContextNode "--env-file-if-exists=$(Join-Path $ContextRoot '.env')" $ContextControl setup "--source=$ContextSource"
+  & $ContextNode "--env-file-if-exists=$(Join-Path $ContextRoot '.env')" $ContextControl setup "--source=$ContextSource" | Out-Null
   if ($LASTEXITCODE -ne 0) { throw 'Protected worker setup failed.' }
   $ContextProbe = [Diagnostics.ProcessStartInfo]::new()
   $ContextProbe.FileName = $ContextNode
@@ -45,4 +45,4 @@ foreach ($ContextSource in $ContextSources) {
 }
 [IO.File]::WriteAllText($ContextLauncher, $ContextScript, [Text.Encoding]::Unicode)
 if ([IO.File]::ReadAllText($ContextLauncher) -ne $ContextScript) { throw 'Startup launcher verification failed.' }
-Write-Output "Installed and verified per-user hidden startup launcher: $ContextLauncher"
+Write-Output 'Background readers start with Windows. Startup launcher verified.'

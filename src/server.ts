@@ -1,9 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import * as teams from './teams.js';
 import * as bak from './bakalari.js';
-import { plain, documentWindow, readTeamsDocument, readBakDocument } from './documents.js';
-import { microsoftToken, bakToken } from './auth.js';
+import { plain, documentWindow, readBakDocument } from './documents.js';
+import { bakToken } from './auth.js';
 import { bakBase } from './config.js';
 import { createHash } from 'node:crypto';
 import { readWebArea, webAreas } from './bakalari-web.js';
@@ -24,12 +23,6 @@ function jsonChunk(value: unknown, offset: number, limit: number, expectedHash?:
   if (expectedHash && hash !== expectedHash) throw new Error('School data changed between chunks. Restart reading at offset 0.');
   return { format: 'json_text', json: json.slice(offset, offset + limit), contentHash: hash, totalCharacters: json.length, nextOffset: offset + limit < json.length ? offset + limit : null, complete: offset === 0 && limit >= json.length };
 }
-function message(item: any) {
-  return { id: item.id, subject: item.subject, text: plain(item.body?.content || ''), sourceUrl: item.webUrl, createdAt: item.createdDateTime, modifiedAt: item.lastModifiedDateTime, author: item.from?.user?.displayName, attachments: (item.attachments || []).map((a: any) => ({ id: a.id, name: a.name, contentUrl: a.contentUrl, contentType: a.contentType, content: a.content })) };
-}
-function work(item: any, classId: string) {
-  return { source: 'teams', id: item.id, classId, title: item.displayName, instructions: plain(item.instructions?.content || ''), dueAt: item.dueDateTime, closeAt: item.closeDateTime, modifiedAt: item.lastModifiedDateTime, status: item.status, sourceUrl: item.webUrl || null };
-}
 function bakWork(item: any) {
   return { source: 'bakalari', id: item.ID || item.Id, subject: item.Subject?.Name, subjectAbbreviation: item.Subject?.Abbrev, teacher: item.Teacher?.Name, class: item.Class?.Name, instructions: plain(item.Content || ''), notice: item.Notice, dueDate: item.DateEnd?.slice(0, 10) || null, originalDueAt: item.DateEnd, duePrecision: 'date', assignedAt: item.DateStart, closed: item.Closed, finished: item.Finished, attachments: item.Attachments || [], sourceUrl: bakBase(), sourceUrlPrecision: 'school portal; use item ID to identify homework' };
 }
@@ -42,7 +35,7 @@ export function createServer() {
   tool('search_cached_context', 'Fast local search of prefetched Teams/Discord messages, homework and documents. Inspect freshness, stale and refreshPending. An empty partial cache does not mean no homework/messages exist.', { source, query, kind: z.enum(['classes', 'assignments', 'activity', 'announcements', 'assignment', 'document', 'channel', 'notifications', 'servers', 'dm']).optional(), limit: z.number().int().min(1).max(100).default(30), offset: z.number().int().min(0).default(0) }, args => cached('search', args));
   tool('read_cached_context', 'Read cached context without checking the browser. Use expectedContentHash on subsequent chunks, preserve citations and freshness. Cached element references cannot be used for actions.', { source, id: z.string().min(1).max(100), ...chunks }, args => cached('read', args));
   tool('refresh_context_cache', 'Queue a background change check for a discovered route or all routes. Returns immediately; it does not claim a fresh result. Read freshness until checkedAt advances. No remote writes.', { source, routeId: z.string().max(100).optional() }, args => cached('refresh', args), false);
-  tool('watch_discord_channel', 'Register an accessible Discord channel or DM URL for background reading and cached search. Only register user-authorized channels/DMs. No sending, reactions, joining or edits.', { url: z.string().url().max(500), title: z.string().min(1).max(120) }, args => cacheRequest('watch', args, 'discord'), false);
+  tool('watch_discord_channel', 'Register an accessible Discord channel, DM or thread URL for background reading and cached search. Only register user-authorized channels/DMs. Reads rendered messages only; sign-in walls, unloaded virtualized content and unvisited threads need the live browser. No sending, reactions, joining or edits.', { url: z.string().url().max(500), title: z.string().min(1).max(120) }, args => cacheRequest('watch', args, 'discord'), false);
   function tool(name: string, description: string, inputSchema: z.ZodRawShape, handler: (args: any) => Promise<unknown>, readOnlyHint = true) {
     server.registerTool(name, { description, inputSchema, annotations: { readOnlyHint, destructiveHint: false, openWorldHint: true } }, async args => {
       try {
@@ -63,43 +56,22 @@ export function createServer() {
     const { ageHours, ...capture } = await readCapture(captureId);
     return { live: false, ageHours, ...jsonChunk(capture, offset, maxCharacters, expectedContentHash) };
   });
-  tool('read_downloaded_teams_document', 'Extract a file downloaded by the live Teams browser: PDF, DOCX, PPTX or text. file is relative to the private Teams browser output directory; arbitrary local files/symlink escapes are blocked. This does not require Graph consent. Cite the original browser resource separately; filesystem modification time is not a teacher revision date.', { file: z.string().min(1).max(2048), offset: z.number().int().min(0).default(0), maxCharacters: z.number().int().min(100).max(50000).default(20000) }, async ({ file, offset, maxCharacters }) => documentWindow(await readTeamsDownload(file), offset, maxCharacters));
-  tool('connection_status', 'Check live Microsoft Graph and Bakalari API account connectivity independently. Teams browser sign-in is checked through the separate teams_live browser tools, not this Graph status.', {}, async () => {
-    const result = await Promise.allSettled([microsoftToken().then(() => teams.graph('/me?$select=id,displayName')), bakToken().then(() => bak.bak('user'))]);
-    return Object.fromEntries(result.map((r, index) => [index === 0 ? 'teams' : 'bakalari', { connected: r.status === 'fulfilled', ...(r.status === 'rejected' ? { error: r.reason instanceof Error ? r.reason.message : 'Connection failed.' } : {}) }]));
-  });
-  tool('list_classes', 'Discover Microsoft education classes and joined Teams. Results can differ; inspect per-source errors.', {}, async () => {
-    const result = await Promise.allSettled([teams.classes(), teams.teams()]);
-    return Object.fromEntries(result.map((r, i) => [i === 0 ? 'educationClasses' : 'teams', r.status === 'fulfilled' ? r.value : { error: r.reason instanceof Error ? r.reason.message : 'Discovery failed.' }]));
-  });
-  tool('list_channels', 'Discover channels in a joined class Team.', { teamId: id }, ({ teamId }) => teams.channels(teamId));
-  tool('list_schoolwork', 'Find homework and projects from one source. Teams requires a classId. Bakalari requires an explicit date range. Search is literal text; dates filter deadlines, not announcement guesses.', { source: z.enum(['teams', 'bakalari']), classId: id.optional(), from: date, to: date, query, ...paging }, async ({ source, classId, from, to, query, offset, limit }) => {
-    if (from > to) throw new Error('from must not be after to.');
-    if (source === 'bakalari') return window((await bak.homeworks(from, to)).map(bakWork).filter((item: ReturnType<typeof bakWork>) => matches(item, query) && item.dueDate && item.dueDate >= from && item.dueDate <= to), offset, limit);
-    if (!classId) throw new Error('classId is required for Teams. Call list_classes first.');
-    const result = await teams.assignments(classId);
-    const items = result.items.map(item => work(item, classId)).filter(item => {
-      const day = item.dueAt ? new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Prague', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(item.dueAt)) : null;
-      return matches(item, query) && (!day || day >= from && day <= to);
-    });
-    return { ...window(items, offset, limit), incomplete: result.incomplete };
-  });
-  tool('get_assignment', 'Read complete Teams assignment requirements and linked resource metadata. Use resolve_document_link for file resource URLs.', { classId: id, assignmentId: id }, async ({ classId, assignmentId }) => {
-    const result = await teams.assignment(classId, assignmentId);
-    return { assignment: work(result.detail, classId), resources: result.resources };
-  });
-  tool('list_announcements', 'Search Teams channel posts or Bakalari received, sent, noticeboard, apology or rating messages. Search applies to the fetched collection; replies require get_thread. Permission failures are reported.', { source: z.enum(['teams', 'bakalari']), teamId: id.optional(), channelId: id.optional(), kind: z.enum(['received', 'noticeboard', 'sent', 'apology', 'rating']).default('received'), query, ...paging }, async ({ source, teamId, channelId, kind, query, offset, limit }) => {
-    if (source === 'bakalari') {
-      const items = (await bak.announcements(kind)).map((item: any) => ({ id: item.Id, title: item.Title, text: plain(item.Text || ''), sentAt: item.SentDate, sender: item.Sender?.Name, attachments: item.Attachments, sourceUrl: bakBase() }));
-      return window(items.filter((item: unknown) => matches(item, query)), offset, limit);
+  tool('read_downloaded_teams_document', 'Extract a file downloaded by the live Teams browser: PDF, DOCX, PPTX or text. file is the download path exactly as the browser reported it — a relative name or an absolute path inside the private Teams browser output directory; outside paths and symlink escapes are blocked. Cite the original browser resource separately; filesystem modification time is not a teacher revision date.', { file: z.string().min(1).max(2048), offset: z.number().int().min(0).default(0), maxCharacters: z.number().int().min(100).max(50000).default(20000) }, async ({ file, offset, maxCharacters }) => documentWindow(await readTeamsDownload(file), offset, maxCharacters));
+  tool('connection_status', 'Check live Bakalari API account connectivity. Teams has no API connection; read Teams through the cache tools or the live browser instead.', {}, async () => {
+    try {
+      await bakToken().then(() => bak.bak('user'));
+      return { bakalari: { connected: true }, teams: { mode: 'browser', detail: 'Teams reads through the dedicated Chrome profile with context_cache_status, search_cached_context and read_cached_context. There is no Teams API connection to check here.' } };
+    } catch (error) {
+      return { bakalari: { connected: false, error: error instanceof Error ? error.message : 'Connection failed.' }, teams: { mode: 'browser', detail: 'Teams reads through the dedicated Chrome profile with context_cache_status, search_cached_context and read_cached_context. There is no Teams API connection to check here.' } };
     }
-    if (!teamId || !channelId) throw new Error('teamId and channelId are required for Teams.');
-    const result = await teams.messages(teamId, channelId);
-    return { ...window(result.items.map(message).filter(item => matches(item, query)), offset, limit), incomplete: result.incomplete };
   });
-  tool('get_thread', 'Read a Teams announcement and its replies to find clarifications or changed deadlines.', { teamId: id, channelId: id, messageId: id, ...paging }, async ({ teamId, channelId, messageId, offset, limit }) => {
-    const result = await teams.thread(teamId, channelId, messageId);
-    return { message: message(result.message), replies: { ...window(result.replies.items.map(message), offset, limit), incomplete: result.replies.incomplete } };
+  tool('list_schoolwork', 'Find Bakalari homework in an explicit date range. Search is literal text; dates filter date-only deadlines. An empty result covers only the queried range and never proves no work is due.', { from: date, to: date, query, ...paging }, async ({ from, to, query, offset, limit }) => {
+    if (from > to) throw new Error('from must not be after to.');
+    return window((await bak.homeworks(from, to)).map(bakWork).filter((item: ReturnType<typeof bakWork>) => matches(item, query) && item.dueDate && item.dueDate >= from && item.dueDate <= to), offset, limit);
+  });
+  tool('list_announcements', 'Search Bakalari received, sent, noticeboard, apology or rating messages. Search applies to the fetched collection. Permission failures are reported.', { kind: z.enum(['received', 'noticeboard', 'sent', 'apology', 'rating']).default('received'), query, ...paging }, async ({ kind, query, offset, limit }) => {
+    const items = (await bak.announcements(kind)).map((item: any) => ({ id: item.Id, title: item.Title, text: plain(item.Text || ''), sentAt: item.SentDate, sender: item.Sender?.Name, attachments: item.Attachments, sourceUrl: bakBase() }));
+    return window(items.filter((item: unknown) => matches(item, query)), offset, limit);
   });
   tool('get_bakalari_message', 'Read a received or sent Bakalari message and its attachments without marking it read.', { messageId: id, kind: z.enum(['received', 'sent']).default('received') }, async ({ messageId, kind }) => {
     const result = await bak.message(messageId, kind);
@@ -142,11 +114,8 @@ export function createServer() {
     const result = await readWebArea(area);
     return { area, ...jsonChunk(result, offset, maxCharacters, expectedContentHash) };
   });
-  tool('resolve_document_link', 'Resolve a SharePoint/OneDrive attachment URL to driveId and itemId using the student permissions.', { url: z.string().url().max(8192) }, ({ url }) => teams.resolveFile(url));
-  tool('read_document', 'Read PDF, DOCX, PPTX or text from Teams or Bakalari. Returns page/slide references and nextOffset. Does not execute files or OCR images. File size limit: 20 MiB.', { source: z.enum(['teams', 'bakalari']), driveId: id.optional(), itemId: id.optional(), attachmentId: id.optional(), offset: z.number().int().min(0).default(0), maxCharacters: z.number().int().min(100).max(50000).default(20000) }, async ({ source, driveId, itemId, attachmentId, offset, maxCharacters }) => {
-    if (source === 'teams' && (!driveId || !itemId)) throw new Error('Teams documents require driveId and itemId.');
-    if (source === 'bakalari' && !attachmentId) throw new Error('Bakalari documents require attachmentId.');
-    const document = source === 'teams' ? await readTeamsDocument(driveId!, itemId!) : await readBakDocument(attachmentId!);
+  tool('read_document', 'Read a Bakalari attachment: PDF, DOCX, PPTX or text. Returns page/slide references and nextOffset. Does not execute files or OCR images. File size limit: 20 MiB.', { attachmentId: id, offset: z.number().int().min(0).default(0), maxCharacters: z.number().int().min(100).max(50000).default(20000) }, async ({ attachmentId, offset, maxCharacters }) => {
+    const document = await readBakDocument(attachmentId);
     return documentWindow(document, offset, maxCharacters);
   });
   return server;

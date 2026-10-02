@@ -10,7 +10,6 @@
     "test": "tsx --test test/*.test.ts",
     "check": "npm run lint && npm run typecheck && npm run build && npm test",
     "start": "node --env-file-if-exists=.env dist/index.js",
-    "login:teams": "node --env-file-if-exists=.env dist/cli.js login-teams",
     "setup:teams-browser": "node --env-file-if-exists=.env scripts/teams-live-config.mjs",
     "login:teams-browser": "node --env-file-if-exists=.env scripts/teams-browser-login.mjs",
     "test:teams-browser": "node scripts/test-teams-browser.mjs",
@@ -33,7 +32,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@azure/msal-node": "^7.0.0",
     "@modelcontextprotocol/sdk": "^1.31.0",
     "@playwright/mcp": "0.0.83",
     "fast-xml-parser": "^5.11.2",

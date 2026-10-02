@@ -38,5 +38,5 @@ export async function saveSecret(name: string, value: unknown) {
   await rename(temporary, target);
 }
 export async function clearSecrets() {
-  for (const name of ['microsoft', 'bakalari']) await rm(join(dataDir, name + '.json'), { force: true });
+  for (const name of ['bakalari']) await rm(join(dataDir, name + '.json'), { force: true });
 }

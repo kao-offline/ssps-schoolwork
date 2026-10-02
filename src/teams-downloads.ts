@@ -5,8 +5,8 @@ import { extract } from './documents.js';
 
 export async function readTeamsDownload(file: string) {
   const root = await realpath(join(dataDir, 'teams-browser-output'));
-  if (isAbsolute(file)) throw new Error('Use a relative download filename inside the Teams browser output directory.');
-  const candidate = resolve(root, file);
+  // The browser reports absolute download paths; accept them and relativize.
+  const candidate = isAbsolute(file) ? resolve(file) : resolve(root, file);
   function inside(path: string) { const rel = relative(root, path); return rel !== '' && rel !== '..' && !rel.startsWith('..' + sep) && !isAbsolute(rel); }
   if (!inside(candidate)) throw new Error('Download path is outside the Teams browser output directory.');
   const target = await realpath(candidate);

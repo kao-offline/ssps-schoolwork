@@ -10,7 +10,6 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 
 const directory = await mkdtemp(join(tmpdir(), 'teams-capture-test-'));
 process.env.SCHOOLWORK_DATA_DIR = join(directory, 'private');
-process.env.MICROSOFT_CLIENT_ID = '';
 const { importCapture, readCapture, listCaptures } = await import('../src/teams-captures.js');
 const { createServer } = await import('../src/server.js');
 const collector = (await readFile('browser/teams-capture/collector.js', 'utf8')).replace('export function', 'function');
@@ -80,7 +79,7 @@ test('import CLI and MCP read/search work offline, preserve provenance and coher
     assert.equal(JSON.parse(json).text, fixture.text);
     assert.equal(JSON.parse(json).complete, false);
     const status = await client.callTool({ name: 'connection_status', arguments: {} });
-    assert.equal(JSON.parse((status.content as { text: string }[])[0].text).data.teams.connected, false);
+    assert.equal(JSON.parse((status.content as { text: string }[])[0].text).data.teams.mode, 'browser');
   } finally { await client.close(); await server.close(); }
 });
 

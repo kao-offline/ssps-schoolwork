@@ -52,52 +52,51 @@ async function main() {
     console.log(JSON.stringify({ apps: apps.map(({ id, name, detected, file }) => ({ id, name, detected, file })), unsupported: ['Muse/Dot or other apps without a verified local MCP configuration: use mcp.local.json with their import UI.'] }, null, 2));
     return;
   }
-  console.log('\nSSPS Schoolwork — your accounts, your computer.');
-  console.log('Credentials and cached schoolwork/messages stay locally; setup does not upload them to GitHub or a shared server.');
-  console.log('Your agent may send retrieved context to its configured AI provider. Chrome sign-in contacts the original services.');
-  console.log('Windows protects saved credentials/cache with DPAPI. Other systems use private file permissions.');
+  console.log('\nSSPS / MCP — Schoolwork, already in context.');
+  console.log('Local only: accounts and cache stay on this computer.');
   await writeFile(join(root, 'mcp.local.json'), JSON.stringify({ mcpServers: serverEntries(root, sources) }, null, 2) + '\n', { mode: 0o600 });
   if (!flags.includes('--agents-only')) {
     phase = 'starting local readers';
-    console.log('[2/5] Starting the private background readers...');
+    console.log('[2/5] CONNECT — starting local readers...');
     for (const source of ['teams', 'discord'].filter(source => sources.includes(source))) await worker(source);
     if (!flags.includes('--no-login')) {
-      console.log('[2/5] Sign in: Bakalari in this terminal, then Teams and Discord in Chrome. Each window closes when ready.');
+      console.log('CONNECT — Bakalari here, then Teams + Discord in Chrome (windows close when done).');
       if (sources.includes('bakalari')) {
         phase = 'Bakalari sign-in';
         const { bakToken } = await import('../dist/auth.js');
         let connected = false;
         try { const { bak } = await import('../dist/bakalari.js'); await bakToken(); await bak('user'); connected = true; } catch { /* Interactive CLI reconnects below. */ }
         if (!connected) await run(process.execPath, [...args, join(root, 'dist/cli.js'), 'login-bakalari']);
-        else console.log('Bakalari account verified; keeping existing sign-in.');
+        else console.log('Bakalari OK — keeping existing sign-in.');
       }
       for (const source of ['teams', 'discord'].filter(source => sources.includes(source))) { phase = source + ' sign-in'; await run(process.execPath, [...args, join(root, 'scripts/teams-browser-login.mjs'), ...(source === 'discord' ? ['--discord'] : [])]); }
     }
   }
   phase = 'installing agent integrations';
-  console.log('[3/5] Adding MCP servers and skills to detected apps (existing settings are backed up)...');
-  const installed = []; const failures = [];
+  console.log('[3/5] AGENTS — adding MCP servers + skills (backups kept)...');
+  const installed = []; const failures = []; const installedNames = [];
   let previousReport;
   try { previousReport = JSON.parse(await readFile(join(root, 'setup-report.local.json'), 'utf8')); } catch { /* First setup. */ }
   for (const app of apps.filter(app => requested ? requested.includes(app.id) : app.detected)) {
     try {
       const result = await installAgent(app, root, sources);
       if (!result.backup && !result.changed) result.backup = previousReport?.installed?.find(entry => entry.config === result.config)?.backup;
-      installed.push(result); console.log('  ✓ ' + app.name);
+      installed.push(result); installedNames.push(app.name);
     }
     catch { failures.push({ app: app.name, config: app.file, error: 'Could not merge this configuration or install its skills; no conflicting MCP entry was replaced. Check file validity, permissions and existing schoolwork names.' }); }
   }
+  if (installedNames.length) console.log('  ✓ ' + installedNames.join(' · '));
   if (!flags.includes('--agents-only') && !flags.includes('--no-startup') && sources.some(source => ['teams', 'discord'].includes(source)) && process.platform === 'win32') { phase = 'installing hidden Windows startup'; await run('powershell.exe', ['-NoProfile', '-File', join(root, 'scripts/install-context-background.ps1'), ...(sources.includes('teams') ? [] : ['-SkipTeams']), ...(sources.includes('discord') ? [] : ['-SkipDiscord'])]); }
   const workers = [];
   const warm = [];
   localReport = { installed, failures, workers, warm, manualImport: join(root, 'mcp.local.json'), accountScope: 'Each student signs into their own accounts. Existing model/provider credentials are preserved.', restart: 'Start a new agent session or reload its MCP servers and skills.' };
   await writeFile(join(root, 'setup-report.local.json'), JSON.stringify(localReport, null, 2) + '\n', { mode: 0o600 });
   if (!flags.includes('--agents-only')) {
-    console.log('[4/5] Preparing your initial cache. Counts only; message contents are not shown.');
+    console.log('[4/5] PREPARE — warming initial views; rest loads in background (partial history).');
     for (const source of ['teams', 'discord'].filter(source => sources.includes(source))) {
       phase = source + ' cache warm-up';
       warm.push(await warmCache(source, progress => {
-        const line = `  ${source}: ${progress.completed}/${progress.required} initial views ready · ${progress.records} cached records · ${progress.elapsedSeconds}s`;
+        const line = `  ${source}: ${progress.completed}/${progress.required} views · ${progress.records} records · ${progress.elapsedSeconds}s`;
         if (process.stdout.isTTY) process.stdout.write('\r' + line.padEnd(105)); else console.log(line);
       }, { timeoutMs: timeout * 1000 }));
       if (process.stdout.isTTY) process.stdout.write('\n');
@@ -108,10 +107,9 @@ async function main() {
     workers.push({ source, records: status.records, authenticationUnavailable: status.authenticationUnavailable, paused: status.paused });
   }
   await writeFile(join(root, 'setup-report.local.json'), JSON.stringify(localReport, null, 2) + '\n', { mode: 0o600 });
-  console.log(`[5/5] ${failures.length ? 'Setup needs attention' : 'Ready'} — ${installed.length} apps configured. Details/backups: setup-report.local.json`);
-  console.log('Open a new agent session and ask: “Read my schoolwork context and help me plan this week.”');
-  console.log('Skills: /class-schoolwork and /discord-context. More channels keep caching in the background; history is partial.');
-  console.log('Unknown clients (including Muse/Dot): import mcp.local.json through their MCP settings.');
+  console.log(`[5/5] ASK — ${failures.length ? 'needs attention' : 'ready'}: ${installed.length} apps. Report: setup-report.local.json`);
+  console.log('New session: “Read my schoolwork context and help me plan this week.”');
+  console.log('Skills: /class-schoolwork · /discord-context. Other clients: import mcp.local.json.');
   for (const failure of failures) console.error(failure.app + ': ' + failure.error);
   if (failures.length) process.exitCode = 1;
 }

@@ -2,7 +2,7 @@
 
 # Live Teams in Hermes
 
-This mode uses Microsoft's Playwright MCP to read the ordinary Teams web app with a dedicated Chrome profile. Routine agent reads run headlessly, without opening or controlling your normal desktop browser. The login helper opens a visible dedicated window for manual sign-in. It does not use our Graph app registration. Microsoft sign-in, MFA, school access policies and document permissions still apply. The student signs in directly in Microsoft pages.
+This mode uses Microsoft's Playwright MCP to read the ordinary Teams web app with a dedicated Chrome profile. Routine agent reads run headlessly, without opening or controlling your normal desktop browser. The login helper opens a visible dedicated window for manual sign-in. There is no Graph app registration; the browser profile is the only Teams connection. Microsoft sign-in, MFA, school access policies and document permissions still apply. The student signs in directly in Microsoft pages.
 
 On this computer the Hermes default profile has `teams_live` enabled alongside `schoolwork`. Open a new Hermes session after completing sign-in and use:
 
@@ -34,7 +34,7 @@ For documents, use the resource's ordinary Download action. The browser MCP save
 
 | Area | Live browser workflow | Coverage limit |
 | --- | --- | --- |
-| Classes and channels | Open Teams/Chat class navigation | Enumerate visible and expanded items; no structured Graph IDs guaranteed |
+| Classes and channels | Open Teams/Chat class navigation | Enumerate visible and expanded items; no structured IDs guaranteed |
 | Homework, project deadlines and resources | Open Assignments/Zadání and each detail | Check selected filters, class and date range; exact displayed deadline text |
 | Announcements and teacher corrections | Read channel posts and expand replies | Scroll/paginate for history; unloaded posts are absent |
 | Files and class materials | Open file listing and download permitted resources | Student's existing permissions; no blanket drive crawl |
@@ -43,7 +43,7 @@ For documents, use the resource's ordinary Download action. The browser MCP save
 | Calendar, meetings, activity and school chats | Open the relevant view/detail | Loaded content only; no background synchronization |
 | Forms, quizzes and other apps | Inspect permitted instructions | No answering/submission; external app access may differ |
 
-This is live UI access, not a complete structured school sync. State what was checked and any unavailable areas. The existing Graph tools remain separately disconnected while consent is blocked. `connection_status.teams.connected=false` describes Graph authentication, not the browser profile. Offline capture tools remain an optional fallback and must be identified as older partial snapshots.
+This is live UI access, not a complete structured school sync. State what was checked and any unavailable areas. There are no Graph tools anymore; `connection_status` reports Bakalari plus a browser note for Teams. If a browser tool reports the target closed, another session holds the profile — call `browser_close`, navigate fresh, and retry once. Offline capture tools remain an optional fallback and must be identified as older partial snapshots.
 
 ## Storage and recovery
 

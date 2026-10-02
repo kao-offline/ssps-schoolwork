@@ -80,21 +80,22 @@ test('queue serializes browser actions, survives failures, and foreground lease 
   await assert.rejects(worker.rpc('browser', { name: 'browser_evaluate', arguments: {} }));
 });
 
-test('changed notifications invalidate cached schoolwork; failed checks preserve last good data', async () => {
+test('changed notifications record activity without invalidating the backlog; failed checks preserve last good data', async () => {
   let now = 1000;
   let text = 'old notification';
   let fail = false;
   const cache = new TeamsCache(false, () => now);
   cache.observe(observation);
   const worker = new BackgroundTeams(cache, { ...fakeBrowser, collect: async route => { if (fail) throw new Error('authentication_or_teams_unavailable'); return { observations: [{ ...observation, ...route, text }], discovered: [] }; } }, () => now);
-  worker.routes = new Map([['activity', { id: 'activity', kind: 'activity', title: 'Notifications', intervalMs: 30000 }]]);
+  worker.routes = new Map([['activity', { id: 'activity', kind: 'activity', title: 'Notifications', intervalMs: 30000 }], ['assignments/upcoming', { id: 'assignments/upcoming', kind: 'assignments', title: 'Upcoming', intervalMs: 300000 }]]);
   worker.requested = new Set(['activity']);
   await worker.tick();
   now += 31000;
   text = 'teacher updated deadline';
   await worker.tick();
   assert.ok(worker.lastActivityChangeAt);
-  assert.equal(cache.read(observation.id).freshness.stale, true);
+  assert.equal(cache.read(observation.id).freshness.stale, false);
+  assert.ok(worker.urgent.has('assignments/upcoming'));
   now += 31000;
   fail = true;
   await worker.tick();
@@ -102,7 +103,7 @@ test('changed notifications invalidate cached schoolwork; failed checks preserve
   assert.equal(cache.read('activity').text, 'teacher updated deadline');
 });
 
-test('reading Discord unread messages does not restart the crawl, but a new indicator invalidates messages', async () => {
+test('reading Discord unread messages does not restart the crawl; a new indicator only records activity', async () => {
   let now = 1000;
   let unread = ['unread A', 'unread B'];
   const cache = new TeamsCache(false, () => now);
@@ -118,7 +119,7 @@ test('reading Discord unread messages does not restart the crawl, but a new indi
   now += 31000; unread = ['unread B', 'unread C'];
   await worker.tick();
   assert.ok(worker.lastActivityChangeAt);
-  assert.equal(cache.read(observation.id).freshness.stale, true);
+  assert.equal(cache.read(observation.id).freshness.stale, false);
 });
 
 test('HTTP/MCP cached reads do not wait for blocked prefetch; local RPC rejects web origins and missing authentication', async () => {
@@ -138,7 +139,7 @@ test('HTTP/MCP cached reads do not wait for blocked prefetch; local RPC rejects 
   const client = new Client({ name: 'cache-integration', version: '1' });
   await server.connect(b); await client.connect(a);
   try {
-    assert.equal((await client.listTools()).tools.length, 24);
+    assert.equal((await client.listTools()).tools.length, 19);
     const result = await client.callTool({ name: 'read_cached_context', arguments: { source: 'teams', id: 'assignments/upcoming' } });
     assert.ok(!result.isError);
     const data = JSON.parse((result.content as { text: string }[])[0].text).data;
@@ -175,6 +176,7 @@ test('UI route discovery separates duplicate titles/date groups and Discord allo
   assert.equal(rows.length, 2);
   assert.notEqual(rows[0].route.id, rows[1].route.id);
   assert.equal(discordChannel('https://discord.com/channels/@me/123456789012345678').kind, 'dm');
+  assert.equal(discordChannel('https://discord.com/channels/123456789012345678/223456789012345678/323456789012345678').kind, 'channel');
   assert.throws(() => discordChannel('https://discord.com.evil.example/channels/@me/123456789012345678'));
   assert.throws(() => discordChannel('https://discord.com/channels/@me/123456789012345678?token=synthetic'));
   const discovered = discordDiscovered({ guilds: [{ id: '123456789012345678', title: 'School' }], links: [{ path: '/channels/123456789012345678/223456789012345678', title: 'homework' }, { path: '/channels/@me/323456789012345678', title: 'DM' }, { path: '/settings', title: 'Never a message route' }] });
