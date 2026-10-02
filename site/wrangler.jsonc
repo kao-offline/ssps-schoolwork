@@ -4,5 +4,8 @@
   "compatibility_date": "2026-10-02",
   "workers_dev": true,
   "assets": { "directory": "./public", "not_found_handling": "none" },
-  "routes": [{ "pattern": "sspsmcp.kaooffline.top", "custom_domain": true }]
+  "routes": [
+    { "pattern": "sspsmcp.kaooffline.top", "custom_domain": true },
+    { "pattern": "sspsmcp.kaooffline.top/*", "zone_name": "kaooffline.top" }
+  ]
 }

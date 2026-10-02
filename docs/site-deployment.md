@@ -13,4 +13,6 @@ npm --prefix site run deploy
 
 Wrangler manages the exact custom domain in `site/wrangler.jsonc`, including DNS and TLS. Commit source before deploying: `/health.json` reports the source Git revision. Verify the domain, health revision and both installer downloads after deployment. Bootstrap updates require a clean checkout and the expected GitHub remote; they preserve modified installations.
 
+The exact-host Worker route also takes priority over the zone's existing quickHOST wildcard route. Keep both configured so installer requests reach this site without changing other subdomains.
+
 Rollback using a previous Cloudflare Worker deployment/version, or check out the previous source revision and deploy it again. Private credentials and user data remain outside the website.
