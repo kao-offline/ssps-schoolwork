@@ -113,6 +113,22 @@ export class BackgroundTeams {
     if (method === 'routes') return { items: [...this.routes.values()].map(route => ({ ...route, nextCheckAt: new Date(this.nextCheck.get(route.id) || this.now()).toISOString(), error: this.errors.get(route.id) || null })), ...this.status() };
     const offline = this.paused || this.authenticationUnavailable;
 
+    if (method === 'bundle') {
+      const args = z.object({ query: z.string().max(200).default(''), kind: z.enum(cacheKinds).optional(), limit: z.number().int().min(1).max(100).default(30), offset: z.number().int().min(0).default(0), maxCharacters: z.number().int().min(100).max(500000).default(200000) }).parse(input);
+      const found = this.cache.search(args.query, args.kind, args.limit, false, offline, args.offset);
+      let remaining = args.maxCharacters;
+      const items = [];
+      for (const item of found.items) {
+        if (remaining <= 0) break;
+        const pending = this.requested.has(item.id) || this.running === item.id || !!item.parentId && (this.requested.has(item.parentId) || this.running === item.parentId);
+        const record = this.cache.read(item.id, 0, remaining, item.contentHash, pending, offline || this.errors.has(item.id) || !!item.parentId && this.errors.has(item.parentId));
+        items.push(record);
+        remaining -= record.text.length;
+      }
+      const nextOffset = args.offset + items.length < found.total ? args.offset + items.length : null;
+      return { status: this.status(), items, total: found.total, nextOffset, incomplete: nextOffset !== null || items.some(item => item.nextOffset !== null || item.truncated), cached: true, coverage: 'loaded UI content; partial, not a complete account sync' };
+    }
+
     if (method === 'search') {
       const args = z.object({ query: z.string().max(200).default(''), kind: z.enum(cacheKinds).optional(), limit: z.number().int().min(1).max(100).default(30), offset: z.number().int().min(0).default(0) }).parse(input);
       const result = this.cache.search(args.query, args.kind, args.limit, false, offline, args.offset);

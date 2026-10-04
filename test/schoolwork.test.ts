@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm, mkdir, writeFile, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { zipSync, strToU8 } from 'fflate';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -28,6 +29,13 @@ test('browser downloads are readable through MCP by relative or absolute path an
   assert.match(document.parts[0].text, /Build the parser/);
   // The browser reports absolute download paths; inside the output directory they are accepted.
   assert.match((await readTeamsDownload(join(output, 'requirements.txt'))).parts[0].text, /Build the parser/);
+  const alias = join(directory, 'profile-alias');
+  const realProfile = join(directory, 'real-profile');
+  await mkdir(join(realProfile, 'teams-browser-output'), { recursive: true });
+  await writeFile(join(realProfile, 'teams-browser-output', 'brief.txt'), 'Alias download fixture');
+  await symlink(realProfile, alias, process.platform === 'win32' ? 'junction' : 'dir');
+  const aliasRead = spawnSync(process.execPath, ['--input-type=module', '-e', "import {readTeamsDownload} from './dist/teams-downloads.js'; const doc = await readTeamsDownload(process.argv[1]); if (!doc.parts[0].text.includes('Alias download fixture')) process.exit(1);", join(alias, 'teams-browser-output', 'brief.txt')], { env: { ...process.env, SCHOOLWORK_DATA_DIR: alias }, encoding: 'utf8' });
+  assert.equal(aliasRead.status, 0, aliasRead.stderr);
   assert.equal(document.source, 'teams-browser-download');
   await assert.rejects(readTeamsDownload('../fixture.json'), /outside/);
   await assert.rejects(readTeamsDownload('.'), /outside/);
@@ -171,7 +179,7 @@ test('MCP tools integrate with Bakalari fixtures and reject external credential 
     return JSON.parse((result.content as { text: string }[])[0].text).data;
   }
   try {
-    assert.equal((await client.listTools()).tools.length, 19);
+    assert.equal((await client.listTools()).tools.length, 21);
     const homework = await call('list_schoolwork', { from: '2026-10-03', to: '2026-10-03' });
     assert.equal(homework.items.length, 1);
     assert.equal(homework.items[0].duePrecision, 'date');
@@ -192,6 +200,17 @@ test('MCP tools integrate with Bakalari fixtures and reject external credential 
     assert.equal(topics.items[0].Theme, 'Reading');
     const grades = await call('read_bakalari_data', { area: 'marks' });
     assert.equal(JSON.parse(grades.json).Subjects[0].Marks[0].Weight, 3);
+    const batch = await call('read_schoolwork_batch', { requests: [
+      { tool: 'list_schoolwork', arguments: { from: '2026-10-03', to: '2026-10-03' } },
+      { tool: 'list_announcements', arguments: { query: 'deadline' } },
+      { tool: 'read_bakalari_data', arguments: { area: 'marks' } },
+      { tool: 'read_bakalari_data', arguments: { area: 'classbook', from: '2026-10-01', to: '2026-10-02' } },
+    ] });
+    assert.deepEqual(batch.results[0].data, homework);
+    assert.deepEqual(batch.results[1].data, announcement);
+    assert.deepEqual(batch.results[2].data, grades);
+    assert.equal(batch.results[3].isError, true);
+    assert.match(batch.results[3].error, /HTTP 403/);
     const firstChunk = await call('read_bakalari_data', { area: 'marks', maxCharacters: 100 });
     const secondChunk = await call('read_bakalari_data', { area: 'marks', maxCharacters: 10000, offset: firstChunk.nextOffset, expectedContentHash: firstChunk.contentHash });
     assert.deepEqual(JSON.parse(firstChunk.json + secondChunk.json), JSON.parse(grades.json));
@@ -224,7 +243,7 @@ test('built server starts over stdio and gives actionable disconnected status wi
   try {
     await client.connect(transport);
     const tools = await client.listTools();
-    assert.equal(tools.tools.length, 19);
+    assert.equal(tools.tools.length, 21);
     const result = await client.callTool({ name: 'connection_status', arguments: {} });
     const data = JSON.parse((result.content as { text: string }[])[0].text).data;
     assert.equal(data.teams.mode, 'browser');

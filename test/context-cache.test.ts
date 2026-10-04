@@ -124,7 +124,8 @@ test('reading Discord unread messages does not restart the crawl; a new indicato
 
 test('HTTP/MCP cached reads do not wait for blocked prefetch; local RPC rejects web origins and missing authentication', async () => {
   const credential = (await cacheAuth(true))!;
-  const cache = new TeamsCache(false);
+  const now = Date.now();
+  const cache = new TeamsCache(false, () => now);
   cache.observe({ ...observation, id: 'assignments/upcoming' });
   cache.observe(observation);
   let release!: () => void;
@@ -139,7 +140,7 @@ test('HTTP/MCP cached reads do not wait for blocked prefetch; local RPC rejects 
   const client = new Client({ name: 'cache-integration', version: '1' });
   await server.connect(b); await client.connect(a);
   try {
-    assert.equal((await client.listTools()).tools.length, 19);
+    assert.equal((await client.listTools()).tools.length, 21);
     const result = await client.callTool({ name: 'read_cached_context', arguments: { source: 'teams', id: 'assignments/upcoming' } });
     assert.ok(!result.isError);
     const data = JSON.parse((result.content as { text: string }[])[0].text).data;
@@ -148,6 +149,36 @@ test('HTTP/MCP cached reads do not wait for blocked prefetch; local RPC rejects 
     const unrelated = await client.callTool({ name: 'read_cached_context', arguments: { id: observation.id } });
     assert.equal(JSON.parse((unrelated.content as { text: string }[])[0].text).data.freshness.refreshPending, false);
     assert.equal(calls, 1, 'cache read does not fetch Teams');
+    // Ten full records + health + search previously required twelve MCP calls.
+    for (let index = 0; index < 10; index++) cache.observe({ ...observation, id: `bulk/${index}`, title: 'Bulk fixture', text: `Requirement ${index}: ${'full teacher text '.repeat(40)}` });
+    const decode = (result: any) => JSON.parse(result.content[0].text).data;
+    const bundleResult = await client.callTool({ name: 'read_context_bundle', arguments: { query: 'Bulk fixture' } });
+    assert.ok(!bundleResult.isError);
+    const bundle = decode(bundleResult);
+    assert.equal(bundle.items.length, 10);
+    assert.equal(bundle.status.records, cache.entries.size);
+    assert.equal(bundle.nextOffset, null);
+    for (const record of bundle.items) assert.deepEqual(record, cache.read(record.id));
+    assert.equal(calls, 1, 'bundle never navigates the browser');
+    const partial = decode(await client.callTool({ name: 'read_context_bundle', arguments: { query: 'Bulk fixture', maxCharacters: 100 } }));
+    assert.equal(partial.items.length, 1);
+    assert.equal(partial.items[0].text.length, 100);
+    assert.equal(partial.items[0].nextOffset, 100);
+    assert.equal(partial.nextOffset, 1);
+    assert.equal(partial.incomplete, true);
+    const continuation = decode(await client.callTool({ name: 'read_cached_context', arguments: { id: partial.items[0].id, offset: 100, expectedContentHash: partial.items[0].contentHash } }));
+    assert.equal(partial.items[0].text + continuation.text, cache.entries.get(partial.items[0].id)!.text);
+    const requests = bundle.items.map((record: any) => ({ tool: 'read_cached_context', arguments: { id: record.id } }));
+    const batch = decode(await client.callTool({ name: 'read_schoolwork_batch', arguments: { requests } }));
+    assert.equal(batch.results.length, 10);
+    assert.equal(batch.incomplete, false);
+    batch.results.forEach((result: any, index: number) => assert.deepEqual(result.data, { source: 'teams', ...cache.read(requests[index].arguments.id) }));
+    const mixed = decode(await client.callTool({ name: 'read_schoolwork_batch', arguments: { requests: [{ tool: 'read_cached_context', arguments: { id: 'missing' } }, requests[0], { tool: 'read_cached_context', arguments: { offset: -1 } }] } }));
+    assert.equal(mixed.results[0].isError, true);
+    assert.equal(mixed.results[1].data.text, batch.results[0].data.text);
+    assert.equal(mixed.results[2].isError, true);
+    for (const name of ['refresh_context_cache', 'watch_discord_channel', 'read_schoolwork_batch']) assert.equal((await client.callTool({ name: 'read_schoolwork_batch', arguments: { requests: [{ tool: name }] } })).isError, true);
+    assert.equal((await client.callTool({ name: 'read_schoolwork_batch', arguments: { requests: [...requests, requests[0]] } })).isError, true);
     const denied = await fetch(`http://127.0.0.1:${port}/rpc`, { method: 'POST', body: '{}' });
     assert.equal(denied.status, 401);
     const browserOrigin = await fetch(`http://127.0.0.1:${port}/rpc`, { method: 'POST', headers: { Authorization: 'Bearer ' + credential.token, Origin: 'https://evil.example' }, body: '{}' });

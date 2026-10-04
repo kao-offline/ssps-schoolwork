@@ -6,12 +6,15 @@ import { cacheAuth, cacheRequest } from '../dist/teams-cache-client.js';
 import { warmCache } from '../dist/setup-warm.js';
 import { dataDir } from '../dist/config.js';
 import { createTui, recap, runTui, tuiEnabled } from './tui.mjs';
+import { chooseSetup } from './setup-choices.mjs';
+import { checkPrerequisites, findNpmCli, chromeCandidates } from './setup-prerequisites.mjs';
+import { existsSync } from 'node:fs';
 const root = resolve(import.meta.dirname, '..');
 const flags = process.argv.slice(2);
 const args = [`--env-file-if-exists=${join(root, '.env')}`];
-const ui = !flags.includes('--detect') && tuiEnabled() ? createTui() : null;
+const ui = !flags.includes('--detect') && tuiEnabled({ force: flags.includes('--tui') }) ? createTui({ enabled: true }) : null;
 const option = (name, fallback) => flags.find(flag => flag.startsWith('--' + name + '='))?.split('=').slice(1).join('=').split(',') || fallback;
-const sources = option('sources', ['teams', 'bakalari', 'discord']);
+let sources = option('sources', ['teams', 'bakalari', 'discord']);
 let phase = 'checking options';
 let localReport;
 function run(command, parameters) {
@@ -43,7 +46,7 @@ async function worker(source) {
   throw new Error(source + ' background worker did not start. Check local cache port/profile ownership.');
 }
 async function main() {
-  const known = new Set(['--no-login', '--no-startup', '--agents-only', '--detect']);
+  const known = new Set(['--no-login', '--no-startup', '--agents-only', '--detect', '--yes', '--tui']);
   if (flags.some(flag => !known.has(flag) && !/^--(?:apps|exclude|sources|cache-timeout)=/.test(flag)) || sources.some(source => !['teams', 'bakalari', 'discord'].includes(source))) throw new Error('Unknown setup option/source. Use --help.');
   const timeout = Number(option('cache-timeout', ['180'])[0]);
   if (!Number.isInteger(timeout) || timeout < 10 || timeout > 900) throw new Error('Cache timeout must be 10–900 seconds.');
@@ -58,18 +61,37 @@ async function main() {
     await writeFile(file, JSON.stringify({ ...previous, excludedApps: [...new Set([...previous.excludedApps, ...excluded])] }, null, 2) + '\n', { mode: 0o600 });
     apps = detectAgents();
   }
-  const requested = option('apps');
+  let requested = option('apps');
   if (requested?.some(id => !apps.some(app => app.id === id))) throw new Error('Unknown app ID. Run --detect for supported IDs.');
   if (flags.includes('--detect')) {
     console.log(JSON.stringify({ apps: apps.map(({ id, name, detected, file }) => ({ id, name, detected, file })), unsupported: ['Muse/Dot or other apps without a verified local MCP configuration: use mcp.local.json with their import UI.'] }, null, 2));
     return;
   }
+  if (ui) await checkPrerequisites({ npmCli: findNpmCli(), onCheck: (name, state, detail) => ui.check(name, state, detail) });
+  if (process.stdin.isTTY && process.stdout.isTTY && !flags.includes('--yes')) {
+    const select = async () => {
+      const choose = (choices, defaults, title, options) => ui ? ui.select(choices, defaults, title, options) : chooseSetup(choices, defaults, title);
+      if (!flags.some(flag => flag.startsWith('--sources='))) sources = await choose([
+        { id: 'teams', name: 'Microsoft Teams', description: 'Read assignments, class announcements and documents using a dedicated local Chrome profile.' },
+        { id: 'bakalari', name: 'Bakalari', description: 'Read homework, marks, timetable and school messages through the school API. Browser not required.' },
+        { id: 'discord', name: 'Discord', description: 'Read accessible school conversations using a separate local Chrome profile. Coverage remains partial.' },
+      ], sources, ' ACCOUNT SOURCES ');
+      const detected = apps.filter(app => app.detected);
+      if (!requested && detected.length) requested = await choose(detected.map(app => ({ ...app, description: `Configure ${app.name} with read-only schoolwork tools and skills. Existing model settings are preserved; changed files receive protected backups.` })), detected.map(app => app.id), ' AGENT APPS ', { min: 0 });
+      if (ui) ui.log(`Selected: ${sources.join(', ')} · ${requested?.length || 0} apps`);
+      else console.log(`\nSources: ${sources.join(', ')}\nApps: ${(requested || []).join(', ') || 'manual MCP import'}\n`);
+    };
+    await select();
+  }
+  if (!flags.includes('--agents-only') && sources.some(source => ['teams', 'discord'].includes(source)) && !chromeCandidates().some(existsSync)) { ui?.check('Chrome', 'fail', 'Missing · install Google Chrome'); throw new Error('Google Chrome is required for the selected Teams/Discord sources. Install Chrome and rerun setup, or select only Bakalari.'); }
   if (!ui) {
     console.log('\nSSPS / MCP — Schoolwork, already in context.');
     console.log('Local only: accounts and cache stay on this computer.');
   }
   await writeFile(join(root, 'mcp.local.json'), JSON.stringify({ mcpServers: serverEntries(root, sources) }, null, 2) + '\n', { mode: 0o600 });
   const connectStep = ui?.step('[2/5] CONNECT — readers + sign-in');
+  const agentsStep = ui?.step('[3/5] AGENTS — servers + skills');
+  const prepareStep = ui?.step('[4/5] PREPARE — initial cache');
   if (!flags.includes('--agents-only')) {
     phase = 'starting local readers';
     if (!ui) console.log('[2/5] CONNECT — starting local readers...');
@@ -91,7 +113,6 @@ async function main() {
     ui?.ok(connectStep, 'connected');
   } else ui?.ok(connectStep, 'skipped');
   phase = 'installing agent integrations';
-  const agentsStep = ui?.step('[3/5] AGENTS — servers + skills');
   if (!ui) console.log('[3/5] AGENTS — adding MCP servers + skills (backups kept)...');
   else ui.run(agentsStep, 'merging configs');
   const installed = []; const failures = []; const installedNames = [];
@@ -112,7 +133,6 @@ async function main() {
   const warm = [];
   localReport = { installed, failures, workers, warm, manualImport: join(root, 'mcp.local.json'), accountScope: 'Each student signs into their own accounts. Existing model/provider credentials are preserved.', restart: 'Start a new agent session or reload its MCP servers and skills.' };
   await writeFile(join(root, 'setup-report.local.json'), JSON.stringify(localReport, null, 2) + '\n', { mode: 0o600 });
-  const prepareStep = ui?.step('[4/5] PREPARE — initial cache');
   if (!flags.includes('--agents-only')) {
     if (!ui) console.log('[4/5] PREPARE — warming initial views; rest loads in background (partial history).');
     else ui.run(prepareStep, 'warming views');
