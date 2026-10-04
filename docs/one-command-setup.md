@@ -78,4 +78,14 @@ Local validation passed all 32 tests, lint, typecheck/build, Chrome fixture chec
 
 ## Interactive setup
 
-In a terminal, setup offers numbered account-source and detected-app selections. Press Enter to keep defaults, or enter comma-separated numbers/IDs. Explicit `--sources` and `--apps` skip their respective questions; `--yes` skips both. Non-interactive runs keep the existing flag-based behavior. `--demo` previews progress without installing or changing accounts. The dashboard adapts to terminal size, hands sign-in the normal terminal, and preserves failure details after it closes. Ctrl+C exits with code 130; rerun to resume completed work.
+In Windows Terminal or another terminal supporting ANSI colors and SGR mouse input, setup opens a full-screen application. Click checkboxes to select account sources and detected agent apps, then click **Continue**. Arrow keys navigate, Space toggles, Enter continues, A selects all, and N clears the selection. Long app lists scroll with the mouse wheel or arrow keys. App selection can be empty for manual MCP import; at least one source is required.
+
+On Windows, use Node.js 22.18+ or 24.6+ for mouse input. Earlier supported Node versions use keyboard navigation and show an upgrade notice. These versions enable native VT input in Node's raw terminal mode ([Node 22.18 source](https://github.com/nodejs/node/blob/v22.18.0/src/tty_wrap.cc#L105), [Node 24.6 source](https://github.com/nodejs/node/blob/v24.6.0/src/tty_wrap.cc#L105)).
+
+The dark dashboard uses cyan navigation, green passed checks, amber optional requirements, and red failures. Wide terminals show installation steps, system checks and live output in separate panels; narrow terminals stack them. Click a step to inspect its details and scroll the log with the mouse wheel. Setup checks Node.js 22.13+, npm, Git and Google Chrome, verifies installed package versions against the lockfile, then installs/builds what is needed. Chrome is required only when running Teams/Discord readers. Missing software gets an explicit fix; the installer does not silently install system programs.
+
+Explicit `--sources` and `--apps` skip their respective selections; `--yes` skips both. Non-interactive runs and `NO_COLOR`/`TERM=dumb` use line output. Add `--tui` to explicitly enable the colorful full-screen interface in a terminal despite these environment hints; redirected output remains plain. `--demo` opens the same clickable source/app selections and simulated progress without installing or changing accounts. Password prompts and browser sign-in temporarily release mouse capture and raw input. Exit restores cursor, colors, mouse mode and the original input mode; failure output remains readable afterward. Ctrl+C exits with code 130; rerun to resume completed work.
+
+```powershell
+npm run setup -- --demo --tui
+```
