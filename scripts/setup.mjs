@@ -3,15 +3,14 @@ import { copyFile, readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { join, resolve } from 'node:path';
-import { createTui, recap, runTui, tuiEnabled } from './tui.mjs';
+import { createTui, runTui, tuiEnabled } from './tui.mjs';
 import { checkPrerequisites, findNpmCli } from './setup-prerequisites.mjs';
 const root = resolve(import.meta.dirname, '..');
 const flags = process.argv.slice(2);
 const args = [`--env-file-if-exists=${join(root, '.env')}`];
 const ui = !flags.includes('--detect') && !flags.includes('--help') && tuiEnabled({ force: flags.includes('--tui') }) ? createTui({ enabled: true }) : null;
-let uiActive = Boolean(ui);
 function run(command, parameters, input) {
-  if (ui && uiActive) return runTui(spawn, ui, command, parameters, { input, cwd: root });
+  if (ui) return runTui(spawn, ui, command, parameters, { input, cwd: root });
   return new Promise((resolveRun, reject) => {
     const child = spawn(command, parameters, { cwd: root, stdio: input === undefined ? 'inherit' : ['pipe', 'inherit', 'inherit'], windowsHide: true });
     if (input !== undefined) child.stdin.end(input);
@@ -24,7 +23,7 @@ async function main() {
   if (flags.includes('--demo') && !flags.includes('--detect')) { await demo(); return; }
   if (Number(process.versions.node.split('.')[0]) < 22 || (Number(process.versions.node.split('.')[0]) === 22 && Number(process.versions.node.split('.')[1]) < 13)) throw new Error('Install Node.js 22.13 or later, then rerun setup.');
   if (flags.includes('--help')) {
-    console.log('node scripts/setup.mjs [--detect] [--demo] [--tui] [--yes] [--agents-only] [--no-login] [--no-startup] [--apps=codex,claude,hermes] [--exclude=windsurf,kilo] [--sources=teams,bakalari,discord] [--cache-timeout=180]');
+    console.log('node scripts/setup.mjs [--detect] [--demo] [--tui] [--yes] [--agents-only] [--no-login] [--no-startup] [--apps=codex,claude,hermes] [--exclude=windsurf,kilo] [--sources=teams,bakalari,discord,outlook] [--cache-timeout=180] [--2b|--no-2b] [--groups=m_fre,aj_nov,sk2] [--subjects=M,AJ]');
     return;
   }
   if (!flags.includes('--detect') && !flags.includes('--agents-only') && !flags.includes('--no-login') && !process.stdin.isTTY) throw new Error('Sign-in needs an interactive terminal. Run setup there, or use --no-login to reuse existing accounts.');
@@ -72,14 +71,17 @@ async function main() {
     ui?.ok(buildStep, 'built');
   } else ui?.ok(buildStep, 'already built');
   if (!flags.includes('--detect') && !existsSync(join(root, '.env'))) await copyFile(join(root, '.env.example'), join(root, '.env'));
-  // Start a new Node process so .env is loaded before importing account/store modules.
-  // The runner owns its own dashboard; hand the terminal back first.
-  uiActive = false;
+  // Load account configuration before importing the runner's server modules.
+  if (existsSync(join(root, '.env'))) process.loadEnvFile(join(root, '.env'));
+  const { runSetup } = await import('./setup-runner.mjs');
+  await runSetup({ ui, flags });
   ui?.stop();
-  if (ui) recap([['Dependencies', 'ready'], ['Local server', 'ready']]);
-  await run(process.execPath, [...args, join(root, 'scripts/setup-runner.mjs'), ...flags]);
 }
-main().catch(error => { uiActive = false; ui?.stop(); console.error(error.message); process.exitCode = error.exitCode === 130 ? 130 : 1; });
+main().catch(async error => {
+  if (ui) { await ui.message('Setup needs attention.', [error.message, 'Completed steps are preserved. Rerun setup to continue.']); ui.stop(); }
+  else console.error(error.message);
+  process.exitCode = error.exitCode === 130 ? 130 : 1;
+});
 
 // Renders the full installer dashboard with fake progress. Changes nothing:
 // no installs, no builds, no writes, no logins.
@@ -99,10 +101,13 @@ async function demo() {
     { id: 'teams', name: 'Microsoft Teams', description: 'Assignments, teacher announcements and documents through your private Chrome profile.' },
     { id: 'bakalari', name: 'Bakalari', description: 'Homework, marks, timetables and school messages. Sign in securely in the terminal.' },
     { id: 'discord', name: 'Discord', description: 'School channels and relevant conversations through a separate private Chrome profile.' },
-  ], ['teams', 'bakalari', 'discord'], ' ACCOUNT SOURCES ');
+    { id: 'outlook', name: 'Outlook school mail', description: 'Read inbox previews and selected mail bodies from your Microsoft account.' },
+  ], ['teams', 'bakalari', 'discord', 'outlook'], ' ACCOUNT SOURCES ');
   ui.log('Demo sources: ' + selected.join(', '));
   const demoApps = await ui.select([{ id: 'codex', name: 'Codex', description: 'Demo integration; no agent settings will be changed.' }, { id: 'claude', name: 'Claude Code' }, { id: 'hermes', name: 'Hermes' }], ['codex', 'claude', 'hermes'], ' AGENT APPS ', { min: 0 });
   const demoNames = demoApps.map(id => ({ codex: 'Codex', claude: 'Claude Code', hermes: 'Hermes' })[id]).join(' · ') || 'manual MCP import';
+  await ui.message('Ready to install · demo', ['Sources: ' + selected.join(', '), 'Apps: ' + demoNames, 'No files or accounts will be changed.'], 'Install');
+  ui.screen('install');
   ui.run(setup, 'locked install');
   await sleep(900);
   ui.ok(setup, 'installed');
@@ -122,14 +127,6 @@ async function demo() {
     await sleep(500);
   }
   ui.ok(prepare, 'views ready');
+  await ui.message('Demo complete.', ['No files or accounts changed.', `${demoApps.length} apps selected.`, 'Start a new agent session after real installation.']);
   ui.stop();
-  recap([
-    ['[1/5] SETUP — dependencies', 'installed'],
-    ['[1/5] SETUP — local server', 'built'],
-    ['[2/5] CONNECT — readers + sign-in', 'connected'],
-    ['[3/5] AGENTS — servers + skills', demoNames],
-    ['[4/5] PREPARE — initial cache', 'views ready'],
-  ]);
-  console.log(`[5/5] ASK — demo complete: ${demoApps.length} apps. No files or accounts changed.`);
-  console.log('New session: “Read my schoolwork context and help me plan this week.”');
 }

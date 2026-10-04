@@ -1,6 +1,7 @@
-import { TeamsBrowser, snapshotYaml, type Route } from './teams-cache-browser.js';
+import { TeamsBrowser, snapshotYaml, elementRef, type Route } from './teams-cache-browser.js';
 import { cacheId, type Observation } from './teams-cache.js';
 import { noticeReader, evaluationJson, noticeObservations } from './browser-notices.js';
+import { classGuild, memberDirectoryReader, memberProfileReader, scrollMemberDirectory, type ClassMember, searchMembers } from './discord-members.js';
 export const discordInitialRoutes: Route[] = [
   { id: 'discord/navigation', kind: 'servers', title: 'Accessible Discord servers and DMs', url: 'https://discord.com/channels/@me', intervalMs: 600000 },
   { id: 'discord/notifications', kind: 'notifications', title: 'Discord unread and mention indicators', url: 'https://discord.com/channels/@me', intervalMs: 30000 },
@@ -66,6 +67,62 @@ export function discordChannel(url: string) {
 }
 export class DiscordBrowser extends TeamsBrowser {
   constructor() { super('discord'); }
+  private async openClass() {
+    const url = `https://discord.com/channels/${classGuild}/1423979576358342666`;
+    const before = await this.text('browser_snapshot');
+    if (!before.includes('Page URL: ' + url)) await this.text('browser_navigate', { url });
+    const snapshot = await this.text('browser_snapshot');
+    if (!snapshot.includes('Page URL: ' + url)) throw new Error('class_server_unavailable');
+    return url;
+  }
+  async classMembers(query = '') {
+    const started = Date.now();
+    const url = await this.openClass();
+    const members = new Map<string, ClassMember>();
+    let warning: string | undefined;
+    try {
+      for (let page = 0; page < 15 && Date.now() - started < 35000; page++) {
+        const rows = evaluationJson(await this.text('browser_evaluate', { function: memberDirectoryReader })) as { id: string; label: string; name: string }[];
+        for (const row of rows) {
+          const username = row.label.split(',')[0].trim();
+          members.set(username, { name: row.name, username, roles: [], sourceUrl: url, checkedAt: new Date().toISOString() });
+        }
+        if (query && searchMembers([...members.values()], query).length) break;
+        if (!evaluationJson(await this.text('browser_evaluate', { function: scrollMemberDirectory }))) break;
+      }
+    } catch (error) {
+      if (!members.size) throw error;
+      warning = 'Directory scan stopped early; the names already observed are available.';
+    }
+    return { members: [...members.values()], complete: false, coverage: 'Rendered class member names only; roles are read separately for the selected person. Hidden/offline members may be absent.', warning };
+  }
+  async classMember(username: string) {
+    const started = Date.now();
+    const url = await this.openClass();
+    await this.text('browser_evaluate', { function: `() => { let e = document.querySelector('[data-list-id^="members"]'); while (e && !(e.scrollHeight > e.clientHeight + 20 && e.clientHeight > 30)) e = e.parentElement; if (e) e.scrollTop = 0; }` });
+    for (let page = 0; page < 15 && Date.now() - started < 35000; page++) {
+      const rows = evaluationJson(await this.text('browser_evaluate', { function: memberDirectoryReader })) as { id: string; label: string }[];
+      const row = rows.find(row => row.label.split(',')[0].trim() === username);
+      if (row) {
+        const view = await this.text('browser_snapshot');
+        const ref = elementRef(view, 'img', row.label);
+        if (!ref) throw new Error('selected_member_not_visible');
+        await this.text('browser_click', { target: ref });
+        try {
+          const member = evaluationJson(await this.text('browser_evaluate', { function: memberProfileReader(row.id, false, username) }));
+          if (!member) throw new Error('selected_profile_not_verified');
+          return { ...member, sourceUrl: url, checkedAt: new Date().toISOString(), rolesCheckedAt: new Date().toISOString() } as ClassMember;
+        } finally {
+          await this.text('browser_press_key', { key: 'Escape' });
+          const current = await this.text('browser_snapshot');
+          const heading = elementRef(current, 'heading', 'Diddy party 2.B: rules');
+          if (heading) await this.text('browser_click', { target: heading });
+        }
+      }
+      if (!evaluationJson(await this.text('browser_evaluate', { function: scrollMemberDirectory }))) break;
+    }
+    throw new Error('selected_member_not_found_in_rendered_directory');
+  }
   async collect(route: Route): Promise<{ observations: Observation[]; discovered: Route[]; owner?: string }> {
     if (!route.url) throw new Error('discord_channel_not_configured');
     let text = await this.text('browser_snapshot');

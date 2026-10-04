@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { loadSecret, saveSecret } from './store.js';
 
-export const cacheKinds = ['classes', 'assignments', 'activity', 'announcements', 'assignment', 'document', 'channel', 'notifications', 'servers', 'dm'] as const;
+export const cacheKinds = ['classes', 'assignments', 'activity', 'announcements', 'assignment', 'document', 'channel', 'notifications', 'servers', 'dm', 'mailbox', 'email'] as const;
 export type CacheKind = typeof cacheKinds[number];
 export type Observation = { id: string; kind: CacheKind; title: string; text: string; sourceUrl: string; parentId?: string; references?: string[] };
 export type CacheEntry = Observation & { contentHash: string; checkedAt: string; changedAt: string; invalidatedAt?: string; truncated?: boolean };

@@ -4,7 +4,7 @@ import { directBrowserConfig } from './teams-live-config.mjs';
 import { cacheRequest } from '../dist/teams-cache-client.js';
 
 // Opens the actual browser integration for manual sign-in; no password/token APIs.
-const source = process.argv.includes('--discord') ? 'discord' : 'teams';
+const source = process.argv.includes('--discord') ? 'discord' : process.argv.includes('--outlook') ? 'outlook' : 'teams';
 const config = directBrowserConfig(undefined, undefined, source);
 let pausedWorker = false;
 try { await cacheRequest('pause', {}, source); pausedWorker = true; } catch { /* Direct sign-in also works before worker setup. */ }
@@ -13,7 +13,7 @@ const transport = new StdioClientTransport({ command: config.command, args: conf
 transport.stderr?.resume();
 try {
   await client.connect(transport);
-  const result = await client.callTool({ name: 'browser_navigate', arguments: { url: source === 'teams' ? 'https://teams.microsoft.com/v2/' : 'https://discord.com/channels/@me' } });
+  const result = await client.callTool({ name: 'browser_navigate', arguments: { url: source === 'teams' ? 'https://teams.microsoft.com/v2/' : source === 'outlook' ? 'https://outlook.office.com/mail/inbox' : 'https://discord.com/channels/@me' } });
   if (result.isError) throw new Error('Browser navigation failed.');
   console.log(`Chrome is open — sign in to ${source} there (15 min max). Passwords stay in the browser, never in chat.`);
   let ready = false;
@@ -24,7 +24,8 @@ try {
     const appUrl = /Page URL: https:\/\/(?:teams\.microsoft\.com|teams\.cloud\.microsoft)\/(?!error)/.test(text);
     const navigation = new Set([...text.matchAll(/(?:button|link|tab) "(Chat|Teams|Calendar|Assignments|Activity|Kalendář|Zadání|Aktivita)(?:"|\b)/g)].map(match => match[1]));
     const discordReady = /Page URL: https:\/\/discord\.com\/channels\//.test(text) && /navigation|User Settings|Servers sidebar|Direct Messages/.test(text);
-    if (source === 'teams' ? appUrl && navigation.size >= 2 : discordReady) { ready = true; break; }
+    const outlookReady = /Page URL: https:\/\/(?:outlook\.office\.com|outlook\.office365\.com)\/mail\//.test(text) && /listbox|Inbox|Doručená|New mail|Nová zpráva/.test(text);
+    if (source === 'teams' ? appUrl && navigation.size >= 2 : source === 'outlook' ? outlookReady : discordReady) { ready = true; break; }
     if (attempt % 6 === 0) console.log(`Waiting for ${source}…`);
     await new Promise(resolve => setTimeout(resolve, 5000));
   }

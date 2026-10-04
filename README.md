@@ -26,7 +26,21 @@ You can [inspect the Windows script](site/public/install.ps1) or [Bash script](s
 2. Watch the first cache load. Setup shows progress before it finishes; the rest loads in the background.
 3. Open a new session in your agent and ask: **“What homework is due this week?”**
 
+The installer stays in one full-screen interface through choices, sign-in and installation, then waits on its Done screen. Enable the optional **2B module** to add [Tasks View](https://tasks-view.matejruzicka.cz/) as a live task source. Search observed class Discord names for role-based group suggestions, or choose groups and subjects manually. Names and selections stay in your local protected profile.
+
 Setup detects supported installed apps, adds MCP configuration and installs skills where supported. Includes Hermes, Codex, Claude, Grok, Gemini, Cursor and more. Unknown apps get manual import instructions; hosted agents need a separate connection.
+
+The 2B picker offers all known groups without requiring Discord or timetable discovery:
+
+| Choice | Options |
+| --- | --- |
+| Math | Součková, Frei, Miškovský, Zýková |
+| English | Černovická (Aj Čer.), Hanuš, Kratochvíle, Novák, Aj Přech, Aj Čamrda \| Doneva |
+| Programming | PR11 Inneman, PR21 Hejduk, PR22 Šrámek, PR31 Procházka |
+| Shared class half | SK1 or SK2 for HAR, WBA, PCV, GRS, TEV, PDV and PSI |
+| Language | Němčina or Španělština |
+
+Other teacher groups discovered from your sources and manual entry remain available. Zýková, Přech and Čamrda/Doneva use observed role labels; their full identities are unconfirmed. OSE is omitted for now.
 
 ## What it reads
 

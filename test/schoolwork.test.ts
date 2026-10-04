@@ -179,7 +179,7 @@ test('MCP tools integrate with Bakalari fixtures and reject external credential 
     return JSON.parse((result.content as { text: string }[])[0].text).data;
   }
   try {
-    assert.equal((await client.listTools()).tools.length, 21);
+    assert.equal((await client.listTools()).tools.length, 28);
     const homework = await call('list_schoolwork', { from: '2026-10-03', to: '2026-10-03' });
     assert.equal(homework.items.length, 1);
     assert.equal(homework.items[0].duePrecision, 'date');
@@ -243,7 +243,7 @@ test('built server starts over stdio and gives actionable disconnected status wi
   try {
     await client.connect(transport);
     const tools = await client.listTools();
-    assert.equal(tools.tools.length, 21);
+    assert.equal(tools.tools.length, 28);
     const result = await client.callTool({ name: 'connection_status', arguments: {} });
     const data = JSON.parse((result.content as { text: string }[])[0].text).data;
     assert.equal(data.teams.mode, 'browser');

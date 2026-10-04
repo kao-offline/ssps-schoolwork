@@ -1,0 +1,132 @@
+import { normalizeName, subjectKey } from './tasks-view.js';
+
+export type SubjectGroup = { subject: string; group: string; teacher?: string; source: 'discord' | 'bakalari' | 'manual' | 'class-catalogue'; groupId?: string; timetableGroup?: string; role?: string };
+export const splitSubjects = ['HAR', 'WBA', 'PCV', 'GRS', 'TEV', 'PDV', 'PSI'];
+export const languageGroups: SubjectGroup[] = [
+  { subject: 'NJ', group: 'Němčina', source: 'class-catalogue' },
+  { subject: 'SJ', group: 'Španělština', source: 'class-catalogue' },
+];
+export const isOseSubject = (subject: string) => /^ose\d*$/.test(normalizeName(subject)) || normalizeName(subject) === 'linearnialgebra';
+export function classHalfFromGroups(groups: SubjectGroup[]) {
+  const explicit = groups.filter(g => g.subject === 'SK');
+  const candidates = [...new Set((explicit.length ? explicit : groups.filter(g => splitSubjects.includes(g.subject))).flatMap(g => {
+    const half = normalizeName(g.group).match(/sk([12])$/)?.[1];
+    return half ? ['SK' + half] : [];
+  }))];
+  return candidates.length === 1 ? candidates[0] as 'SK1' | 'SK2' : undefined;
+}
+export function groupsForClassHalf(half: 'SK1' | 'SK2', source: SubjectGroup['source'] = 'manual', timetable: SubjectGroup[] = []): SubjectGroup[] {
+  return ['SK', ...splitSubjects].map(subject => {
+    const matching = timetable.find(g => g.subject === subject && normalizeName(g.group).endsWith(half.toLowerCase()));
+    return { subject, group: half, source, ...(matching?.groupId ? { groupId: matching.groupId } : {}) };
+  });
+}
+// Available to every student. Unknown teacher identities remain role labels.
+export const classGroupChoices: SubjectGroup[] = [
+  { subject: 'MAT', group: 'matika-Součková', teacher: 'Mgr. Monika Součková', source: 'class-catalogue' },
+  { subject: 'MAT', group: 'matika-Frei', teacher: 'Marcel Frei', source: 'class-catalogue' },
+  { subject: 'MAT', group: 'matika-Miškovský', teacher: 'Pavel Miškovský', source: 'class-catalogue' },
+  { subject: 'MAT', group: 'matika-Zýková', source: 'class-catalogue' },
+  { subject: 'ANG', group: 'Aj Čer.', teacher: 'Mgr. Veronika Černovická', source: 'class-catalogue' },
+  { subject: 'ANG', group: 'Aj Hanuš', teacher: 'Filip Hanuš', source: 'class-catalogue' },
+  { subject: 'ANG', group: 'Aj Kratochvíle', teacher: 'Jan Kratochvíle', source: 'class-catalogue' },
+  { subject: 'ANG', group: 'Aj Novák', teacher: 'Václav Novák', source: 'class-catalogue' },
+  { subject: 'ANG', group: 'Aj Přech', source: 'class-catalogue' },
+  { subject: 'ANG', group: 'Aj Čamrda | Doneva', source: 'class-catalogue' },
+  { subject: 'PVA', group: 'PR11', teacher: 'Bc. Šimon Inneman', source: 'class-catalogue' },
+  { subject: 'PVA', group: 'PR21', teacher: 'Michal Hejduk', role: 'PVA | Hejduk', source: 'class-catalogue' },
+  { subject: 'PVA', group: 'PR22', teacher: 'Šimon Šrámek', source: 'class-catalogue' },
+  { subject: 'PVA', group: 'PR31', teacher: 'Lukáš Procházka', source: 'class-catalogue' },
+];
+export function canonicalSubjectGroup(group: SubjectGroup): SubjectGroup {
+  const known = classGroupChoices.find(g => g.subject === group.subject && [g.group, g.role].some(label => label && [group.group, group.role].some(value => value && normalizeName(value) === normalizeName(label))));
+  if (known) return { ...group, teacher: known.teacher };
+  if (group.subject === 'ANG' && (normalizeName(group.teacher || '') === 'cer' || normalizeName(group.group) === 'ajcer')) {
+    return { ...group, teacher: 'Mgr. Veronika Černovická' };
+  }
+  return group;
+}
+export function mergeSubjectGroups(groups: SubjectGroup[]): SubjectGroup[] {
+  const merged: SubjectGroup[] = [];
+  for (const raw of groups) {
+    const group = canonicalSubjectGroup(raw);
+    const existing = merged.find(g => sameSubjectGroup(g, group));
+    if (!existing) merged.push({ ...group });
+    else {
+      existing.groupId ||= group.groupId;
+      existing.timetableGroup ||= group.timetableGroup || (group.source === 'bakalari' ? group.group : undefined);
+      existing.role ||= group.role;
+    }
+  }
+  return merged;
+}
+const canonicalSubject = (subject: string) => isOseSubject(subject) ? 'OSE' : ({ m: 'MAT', aj: 'ANG', cj: 'CJL', f: 'FYZ' })[subjectKey(subject)] || subject.toUpperCase();
+export function roleSubjectGroups(roles: string[]): SubjectGroup[] {
+  return roles.flatMap(role => {
+    const cleaned = role.trim();
+    const language = normalizeName(cleaned);
+    if (language === 'linearnialgebra') return [{ subject: 'OSE', group: cleaned, source: 'discord' as const, role }];
+    if (['nemcina', 'nemeckyjazyk', 'nj'].includes(language)) return [{ ...languageGroups[0], source: 'discord' as const, role }];
+    if (['spanel', 'spanelstina', 'spanelskyjazyk', 'sj'].includes(language)) return [{ ...languageGroups[1], source: 'discord' as const, role }];
+    if (/^SK[12]$/i.test(cleaned)) return [{ subject: 'SK', group: cleaned.toUpperCase(), source: 'discord' as const, role }];
+    const match = cleaned.match(/^(matika|matematika|aj|angličtina|[A-Z][A-Z0-9]{1,7})\s*(?:[|:-]\s*|\s+)(.+)$/i);
+    if (!match) return [];
+    const subject = /^(matika|matematika)$/i.test(match[1]) ? 'MAT' : /^(aj|angličtina)$/i.test(match[1]) ? 'ANG' : match[1].toUpperCase();
+    // Only subject role prefixes, never social, moderation or notification roles.
+    if (!['MAT', 'ANG', 'PCV', 'PVA', 'PDV', 'WBA', 'HAR', 'GRS', 'PSI', 'OSE', 'CJL', 'FYZ', 'TEV'].includes(subject)) return [];
+    return [canonicalSubjectGroup({ subject, group: cleaned, teacher: match[2].trim(), source: 'discord', role })];
+  });
+}
+export function timetableSubjectGroups(timetable: any): SubjectGroup[] {
+  const subjects = new Map<string, any>((timetable.Subjects || []).map((s: any) => [s.Id, s]));
+  const teachers = new Map<string, any>((timetable.Teachers || []).map((s: any) => [s.Id, s]));
+  const groups = new Map<string, any>((timetable.Groups || []).map((s: any) => [s.Id, s]));
+  const choices = new Map<string, SubjectGroup>();
+  for (const atom of (timetable.Days || []).flatMap((d: any) => d.Atoms || [])) {
+    const subject = subjects.get(atom.SubjectId)?.Abbrev;
+    if (!subject) continue;
+    for (const id of atom.GroupIds || []) {
+      const group = groups.get(id);
+      if (!group || /^2\.?\s*B$/i.test(group.Abbrev?.trim() || '')) continue;
+      const choice: SubjectGroup = { subject: canonicalSubject(subject), teacher: teachers.get(atom.TeacherId)?.Name, group: group.Name || group.Abbrev, groupId: id, source: 'bakalari' };
+      choices.set(JSON.stringify([choice.subject, id, choice.teacher]), choice);
+    }
+  }
+  return [...choices.values()];
+}
+export function sameSubjectGroup(a: SubjectGroup, b: SubjectGroup) {
+  if (a.subject !== b.subject) return false;
+  a = canonicalSubjectGroup(a); b = canonicalSubjectGroup(b);
+  const x = normalizeName(a.teacher || a.group), y = normalizeName(b.teacher || b.group);
+  return x === y || !!a.teacher && !!b.teacher && (x.endsWith(y) || y.endsWith(x));
+}
+export function suggestedSubjectGroups(timetable: SubjectGroup[], roles: string[]) {
+  const fromRoles = roleSubjectGroups(roles);
+  const sk = fromRoles.find(g => g.subject === 'SK')?.group;
+  for (const role of fromRoles) {
+    const matches = timetable.filter(group => sameSubjectGroup(role, group));
+    if (matches.length === 1) { role.groupId = matches[0].groupId; role.timetableGroup = matches[0].group; }
+  }
+  // Standalone teacher/elective roles are matched only against timetable evidence.
+  for (const group of timetable) if (roles.some(role => {
+    const value = normalizeName(role);
+    return value.length >= 4 && (normalizeName(group.group) === value || !!group.teacher && normalizeName(group.teacher).endsWith(value));
+  }) && !fromRoles.some(g => sameSubjectGroup(g, group))) fromRoles.push({ ...group, ...(sk && /SK[12]/i.test(group.group) ? { group: sk, groupId: undefined } : {}), source: 'discord' });
+  // The timetable identifies which subjects use the common SK split. The role
+  // selects that split, but does not establish the other group's teacher.
+  if (sk) for (const subject of new Set(timetable.filter(g => /SK[12]/i.test(g.group)).map(g => g.subject))) {
+    if (fromRoles.some(g => g.subject === subject)) continue;
+    const exact = timetable.filter(g => g.subject === subject && normalizeName(g.group).endsWith(normalizeName(sk)));
+    fromRoles.push(exact.length === 1 ? { ...exact[0], source: 'discord', role: sk } : { subject, group: sk, source: 'discord', role: sk });
+  }
+  return [...fromRoles, ...timetable.filter(group => !fromRoles.some(r => r.subject === group.subject)
+    && timetable.filter(g => g.subject === group.subject).length === 1
+    && (!sk || !/SK[12]/i.test(group.group) || normalizeName(group.group).endsWith(normalizeName(sk))))];
+}
+export function taskGroupsForSubjects(selected: SubjectGroup[], available: string[]) {
+  return available.filter(code => selected.some(group => {
+    if (/^sk[12]$/i.test(code)) return normalizeName(group.group).endsWith(code.toLowerCase());
+    const match = code.match(/^(m|aj)_(.+)$/i);
+    return !!match && subjectKey(group.subject) === match[1].toLowerCase() && (group.teacher || '').split(/\s+/).some(name => normalizeName(name).startsWith(normalizeName(match[2])));
+  }));
+}

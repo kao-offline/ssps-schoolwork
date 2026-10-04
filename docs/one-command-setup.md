@@ -20,6 +20,21 @@ Discord's default scope is all accessible servers and exposed DMs. The reader on
 
 ## Options
 
+The full-screen installer owns the terminal once. Choose sources, apps and the optional 2B module, connect accounts and review groups/subjects, then press **Install**. Commands run with captured output; Bakalari's hidden password field stays inside the TUI. Browser authentication opens Chrome while the installer remains visible. Completion and recoverable errors wait for **Done**; there are no intermediate terminal recaps. Redirected/noninteractive runs retain plain output.
+
+The 2B module adds `read_2b_profile` and `list_2b_tasks`. Tasks View is a live alternative task source maintained by classmates, not a design reference or an official teacher feed. Its current group codes are discovered from the website. Class-wide tasks are always included; no subjects selected means all subjects. Discord name search reads rendered members and expanded profile roles in the 2.B class server. Czech accents are normalized for search, multiple matches require an explicit profile choice, and matching names do not authenticate identity. Suggestions are editable. Offline/hidden members and unrendered roles may be missing; an unavailable live directory can use the locally saved directory with its original check date. All names/roles and selections are saved through the protected local store, never in the public site.
+
+For noninteractive setup, supply selections explicitly:
+
+Choose SK1 or SK2 once for HAR, WBA, PCV, GRS, TEV, PDV and PSI; these subjects need class-half membership, not teacher selection. The language choices are only Němčina (NJ) and Španělština (SJ). Lineární Algebra is classified as OSE, and OSE selections are omitted for now. Math, English and programming (PVA) keep their own group selections. Parallel programming groups remain choices. The profile preserves `classHalf` and `subjectGroups` independently of the few filter codes currently offered by Tasks View. Older profiles are normalized when upgraded. Name lookup loads names first and reads roles only for the selected person; it does not open every member profile. A partial directory remains usable when later scrolling fails.
+
+```powershell
+node scripts/setup.mjs --yes --2b --groups=m_fre,aj_nov,sk2 --subjects=M,AJ
+node scripts/setup.mjs --no-2b
+```
+
+`--groups=` selects only class-wide tasks; `--subjects=` selects all subjects. Omitted values reuse a saved profile, or default to class-wide tasks/all subjects for a new profile. Future task reads fetch the original website and preserve its group-filtered link, date-only deadline and description. Website/network/parser failures remain errors, rather than successful empty results.
+
 ```powershell
 node scripts/setup.mjs --detect
 node scripts/setup.mjs --apps=hermes,codex,claude,grok
@@ -52,7 +67,7 @@ node scripts/setup.mjs --no-startup
 
 Detection uses known configuration files/directories and CLI executables on PATH. Windsurf requires an executable; VS Code extension adapters require an installed extension registration and package. Old settings folders alone do not qualify for these adapters. Use `node scripts/setup.mjs --detect --exclude=windsurf,kilo` to persistently skip unwanted apps. This saves IDs in the private data directory's `setup-preferences.json`; edit `excludedApps` there to re-enable an app. Exclusion prevents future automatic setup; it does not remove existing entries. Explicit `--apps=` selection can override it.
 
-Custom editor profiles, portable installations, policy-managed clients and unknown formats may need manual import. Muse/Dot and hosted apps do not have a verified adapter here: use the generated ignored `mcp.local.json` in an app supporting local stdio MCP. The installer never invents an undocumented configuration or claims universal app detection. Named servers are `schoolwork`, `teams_live` and `discord_live`. Proxies expose eight browser tools each; schoolwork exposes 21 tools. Clients may still require their ordinary trust/enable prompts.
+Custom editor profiles, portable installations, policy-managed clients and unknown formats may need manual import. Muse/Dot and hosted apps do not have a verified adapter here: use the generated ignored `mcp.local.json` in an app supporting local stdio MCP. The installer never invents an undocumented configuration or claims universal app detection. Named servers are `schoolwork`, `teams_live` and `discord_live`. Proxies expose eight browser tools each; schoolwork exposes 23 tools. Clients may still require their ordinary trust/enable prompts.
 
 Adapters follow the clients' published MCP formats: [Codex](https://learn.chatgpt.com/docs/extend/mcp?surface=cli), [Claude Code](https://code.claude.com/docs/en/mcp), [Gemini](https://google-gemini.github.io/gemini-cli/docs/tools/mcp-server.html), [OpenCode](https://opencode.ai/docs/mcp-servers/), [Cursor](https://cursor.com/docs/mcp), [VS Code](https://code.visualstudio.com/docs/agent-customization/mcp-servers), [LM Studio](https://lmstudio.ai/docs/app/mcp), [Zed](https://zed.dev/docs/ai/mcp). Grok's installed official README verifies its TOML MCP and user skill paths. Windsurf's legacy path is supported; the newer Devin client has a different path and currently requires manual import.
 

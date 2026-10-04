@@ -1,6 +1,6 @@
 // Save owned readers before dependency/source updates, then setup restarts them.
 import { cacheRequest } from '../dist/teams-cache-client.js';
-for (const source of ['teams', 'discord']) {
+for (const source of ['teams', 'discord', 'outlook']) {
   let status;
   try { status = await cacheRequest('status', {}, source); } catch { continue; }
   if (status.service !== 'ssps-' + source + '-cache' || !Number.isInteger(status.pid) || status.pid <= 0) throw new Error('Unexpected worker identity; no process was stopped.');

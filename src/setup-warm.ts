@@ -6,9 +6,9 @@ export async function warmCache(source: CacheSource, onProgress: (progress: Warm
   const now = options.now || Date.now;
   const sleep = options.sleep || (ms => new Promise(resolve => setTimeout(resolve, ms)));
   const started = now();
-  const required = source === 'teams' ? ['assignments/upcoming', 'classes', 'activity'] : ['discord/navigation', 'discord/notifications'];
+  const required = source === 'teams' ? ['assignments/upcoming', 'classes', 'activity'] : source === 'outlook' ? ['outlook/inbox'] : ['discord/navigation', 'discord/notifications'];
   for (const routeId of required) await request('refresh', { routeId }, source);
-  let conversationSelected = source === 'teams';
+  let conversationSelected = source !== 'discord';
   while (now() - started < (options.timeoutMs || 180000)) {
     const status = await request('status', {}, source);
     if (status.authenticationUnavailable || status.paused) throw new Error(`${source} sign-in needs attention. Rerun setup in a terminal and complete the dedicated sign-in window.`);

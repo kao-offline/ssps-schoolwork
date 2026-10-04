@@ -1,0 +1,62 @@
+﻿import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+const directory = await mkdtemp(join(tmpdir(), 'ssps-2b-'));
+process.env.SCHOOLWORK_DATA_DIR = directory;
+const { parseTasksView, groupsFromRoles, saveClassProfile, classProfile, listClassTasks } = await import('../src/tasks-view.js');
+const { searchMembers } = await import('../src/discord-members.js');
+const { createServer } = await import('../src/server.js');
+const row = (date: string, subject: string, groups: string, content: string) => `<div class="task"><div class="task-date">${date}</div><div class="task-name">${subject}</div><div class="task-groups">${groups}</div><div class="task-description">${content}</div></div>`;
+const html = `<h1>Tasks View - 2.B SSPŠ</h1><input id="filter_checkbox_group_m_fre" value="m_fre"><input id="filter_checkbox_group_sk2" value="sk2"><div class="tasks">${row('6.10.2026', 'M', 'm_fre', 'Test &amp; homework')}${row('7.10.2026', 'ČJ', '', 'Whole class')}${row('8.10.2026', 'PDV', 'sk2', 'Presentation')}</div>`;
+test.after(async () => { await rm(directory, { recursive: true, force: true }); });
+test('Tasks View reads dates, group codes, decoded descriptions and fails on changed layouts', () => {
+  const result = parseTasksView(html);
+  assert.deepEqual(result.groups, ['m_fre', 'sk2']);
+  assert.equal(result.items.length, 3);
+  assert.equal(result.items[0].dueDate, '2026-10-06');
+  assert.equal(result.items[0].instructions, 'Test & homework');
+  assert.deepEqual(result.items[1].groups, []);
+  assert.throws(() => parseTasksView('<h1>Cloudflare sign-in</h1>'), /unsupported/);
+  assert.throws(() => parseTasksView(html.replace('task-date', 'new-date')), /format changed/);
+  assert.throws(() => parseTasksView(html.replace('6.10.2026', '32.10.2026')));
+});
+test('role mapping and name search normalize Czech accents without inferring unrelated roles', () => {
+  assert.deepEqual(groupsFromRoles(['matika-Freisleben', 'Aj Novotná', '2.B SK2', 'Admin'], ['m_fre', 'aj_nov', 'sk2']), ['m_fre', 'aj_nov', 'sk2']);
+  assert.deepEqual(groupsFromRoles(['matika-Miškovský', 'Aj Čamrda | Doneva', 'SK1'], ['m_fre', 'aj_nov', 'sk2']), []);
+  const member = { name: 'Matěj Růžička', username: 'matej', roles: ['SK2'], sourceUrl: 'https://discord.com', checkedAt: '2026-10-04' };
+  assert.deepEqual(searchMembers([member], 'matej ruz'), [member]);
+});
+test('2B MCP applies private profile, group/date/subject filters, pagination, overrides and upstream failures', async () => {
+  const original = globalThis.fetch;
+  const requests: URL[] = [];
+  globalThis.fetch = async input => { requests.push(new URL(String(input))); return new Response(html); };
+  const [a, b] = InMemoryTransport.createLinkedPair();
+  const server = createServer(); const client = new Client({ name: '2b-test', version: '1' });
+  await server.connect(b); await client.connect(a);
+  try {
+    const disabled = await client.callTool({ name: 'list_2b_tasks', arguments: {} });
+    assert.equal(disabled.isError, true);
+    await saveClassProfile({ enabled: true, className: '2.B', groups: ['m_fre'], subjects: [], updatedAt: new Date().toISOString() });
+    assert.deepEqual((await classProfile())?.groups, ['m_fre']);
+    const result = await client.callTool({ name: 'list_2b_tasks', arguments: { limit: 1 } });
+    assert.ok(!result.isError);
+    const data = JSON.parse((result.content as { text: string }[])[0].text).data;
+    assert.equal(data.total, 2); assert.equal(data.nextOffset, 1);
+    assert.equal(requests.at(-1)?.searchParams.get('groups'), 'm_fre');
+    assert.match(data.items[0].sourceUrl, /groups=m_fre/);
+    const subjects = await listClassTasks({ subjects: ['MAT'], offset: 0, limit: 30 });
+    assert.equal(subjects.items.length, 1);
+    const wholeClass = await listClassTasks({ groups: [], offset: 0, limit: 30 });
+    assert.equal(wholeClass.items.length, 1); assert.equal(wholeClass.items[0].subject, 'ČJ');
+    const changed = await listClassTasks({ groups: ['sk2'], from: '2026-10-08', offset: 0, limit: 30 });
+    assert.equal(changed.items[0].subject, 'PDV');
+    globalThis.fetch = async () => new Response('Unavailable', { status: 503 });
+    const failed = await client.callTool({ name: 'list_2b_tasks', arguments: {} });
+    assert.equal(failed.isError, true);
+    assert.match((failed.content as { text: string }[])[0].text, /503/);
+  } finally { globalThis.fetch = original; await client.close(); await server.close(); }
+});
