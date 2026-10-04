@@ -7,7 +7,7 @@ import { readTeamsDownload } from './teams-downloads.js';
 import { noticeReader, evaluationJson, noticeObservations } from './browser-notices.js';
 
 export const browserTools = ['browser_navigate', 'browser_navigate_back', 'browser_snapshot', 'browser_click', 'browser_press_key', 'browser_tabs', 'browser_wait_for', 'browser_close'];
-export type Route = { id: string; kind: CacheKind; title: string; intervalMs: number; className?: string; assignmentTitle?: string; tab?: 'Upcoming' | 'Past due'; assignmentKey?: string; url?: string };
+export type Route = { id: string; kind: CacheKind; title: string; intervalMs: number; className?: string; assignmentTitle?: string; tab?: 'Upcoming' | 'Past due'; assignmentKey?: string; url?: string; mailKey?: string; mailQuery?: string; foregroundOnly?: boolean };
 export const initialRoutes: Route[] = [
   { id: 'assignments/upcoming', kind: 'assignments', title: 'Upcoming assignments', tab: 'Upcoming', intervalMs: 300000 },
   { id: 'classes', kind: 'classes', title: 'Class teams', intervalMs: 1800000 },
@@ -36,7 +36,7 @@ export function assignmentRows(text: string, tab: 'Upcoming' | 'Past due') {
 export class TeamsBrowser {
   private client?: Client;
   private started = false;
-  constructor(private source: 'teams' | 'discord' = 'teams') {}
+  constructor(private source: 'teams' | 'discord' | 'outlook' = 'teams') {}
   private async connect() {
     if (!this.client) {
       const transport = new StdioClientTransport({ command: process.execPath, args: [join(import.meta.dirname, '../node_modules/@playwright/mcp/cli.js'), '--browser', 'chrome', '--headless', '--user-data-dir', join(dataDir, this.source + '-browser-profile'), '--output-dir', join(dataDir, this.source + '-browser-output'), '--file-paths', 'absolute', '--codegen', 'none', '--snapshot-mode', 'full', '--console-level', 'error', '--no-webmcp'], stderr: 'pipe' });

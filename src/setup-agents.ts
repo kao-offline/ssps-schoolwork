@@ -61,9 +61,9 @@ export function detectAgents(p = defaultPaths()): Agent[] {
     : p.platform === 'darwin' && [join('/Applications', 'Windsurf.app/Contents/MacOS/Electron'), join(home, 'Applications/Windsurf.app/Contents/MacOS/Electron')].some(existsSync));
   return specifications.map(agent => ({ ...agent, detected: !excluded.includes(agent.id) && (agent.id === 'windsurf' ? !!windsurfInstalled : agent.id in extensions ? editorExtensionInstalled(agent.id) : existsSync(agent.file) || dirname(agent.file) !== home && existsSync(dirname(agent.file)) || hasCommand(agent.id === 'vscode' ? 'code' : agent.id, p) || (agent.id === 'claude' && existsSync(join(home, '.claude')))) }));
 }
-export function serverEntries(root: string, sources = ['teams', 'bakalari', 'discord']) {
+export function serverEntries(root: string, sources = ['teams', 'bakalari', 'discord', 'outlook']) {
   const args = [`--env-file-if-exists=${join(root, '.env')}`];
-  const entries: Record<string, any> = { schoolwork: { command: process.execPath, args: [...args, join(root, 'dist/index.js')] } };
+  const entries: Record<string, any> = { schoolwork: { command: process.execPath, args: [...args, join(root, 'dist/index.js')], env: { SCHOOLWORK_SOURCES: sources.join(',') } } };
   for (const source of ['teams', 'discord']) if (sources.includes(source)) entries[source + '_live'] = { command: process.execPath, args: [...args, join(root, 'dist/teams-browser-proxy.js'), '--source=' + source] };
   return entries;
 }
@@ -88,6 +88,7 @@ export function mergedConfig(text: string, format: Format, entries: Record<strin
       }).join('\n');
       if (parsed.mcp_servers?.[name] && !found) throw new Error('Inline MCP tables need manual migration; configuration was not modified.');
       result = result.trimEnd() + `\n\n[mcp_servers.${name}]\ncommand = ${JSON.stringify(entry.command)}\nargs = ${JSON.stringify(entry.args)}\nenabled = true\nstartup_timeout_sec = 60\ntool_timeout_sec = 120\n`;
+      if (entry.env) result += `env = { SCHOOLWORK_SOURCES = ${JSON.stringify(entry.env.SCHOOLWORK_SOURCES)} }\n`;
       if (format === 'toml' && name.endsWith('_live')) result += `enabled_tools = ${JSON.stringify(browserTools)}\n`;
     }
     parseToml(result);
@@ -113,7 +114,7 @@ export function mergedConfig(text: string, format: Format, entries: Record<strin
   for (const [name, entry] of Object.entries(entries)) {
     assertOwned(parsed[key]?.[name], entry, name);
     const value = format === 'opencode' ? { type: 'local', command: [entry.command, ...entry.args], enabled: true, timeout: 120000 }
-      : format === 'zed' ? { ...entry, env: {} } : format === 'vscode' ? { type: 'stdio', ...entry } : entry;
+      : format === 'zed' ? { ...entry, env: entry.env || {} } : format === 'vscode' ? { type: 'stdio', ...entry } : entry;
     result = applyEdits(result, modify(result, [key, name], value, { formattingOptions: { insertSpaces: true, tabSize: 2 } }));
   }
   return result;

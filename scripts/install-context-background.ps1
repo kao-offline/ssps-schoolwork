@@ -1,4 +1,4 @@
-param([switch]$RemoveStartup, [switch]$SkipTeams, [switch]$SkipDiscord)
+param([switch]$RemoveStartup, [switch]$SkipTeams, [switch]$SkipDiscord, [switch]$SkipOutlook)
 $ErrorActionPreference = 'Stop'
 $ContextRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $ContextNode = (Get-Command node -ErrorAction Stop).Source
@@ -23,6 +23,7 @@ $ContextScript = "' SSPS local context watchers`r`nSet shell = CreateObject(""WS
 $ContextSources = @()
 if (!$SkipTeams) { $ContextSources += 'teams' }
 if (!$SkipDiscord) { $ContextSources += 'discord' }
+if (!$SkipOutlook) { $ContextSources += 'outlook' }
 foreach ($ContextSource in $ContextSources) {
   $ContextCommand = $ContextBaseCommand + ' --source=' + $ContextSource
   $ContextScript += 'shell.Run "' + $ContextCommand.Replace('"', '""') + '", 0, False' + "`r`n"

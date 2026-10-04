@@ -23,7 +23,7 @@ async function main() {
   if (flags.includes('--demo') && !flags.includes('--detect')) { await demo(); return; }
   if (Number(process.versions.node.split('.')[0]) < 22 || (Number(process.versions.node.split('.')[0]) === 22 && Number(process.versions.node.split('.')[1]) < 13)) throw new Error('Install Node.js 22.13 or later, then rerun setup.');
   if (flags.includes('--help')) {
-    console.log('node scripts/setup.mjs [--detect] [--demo] [--tui] [--yes] [--agents-only] [--no-login] [--no-startup] [--apps=codex,claude,hermes] [--exclude=windsurf,kilo] [--sources=teams,bakalari,discord] [--cache-timeout=180] [--2b|--no-2b] [--groups=m_fre,aj_nov,sk2] [--subjects=M,AJ]');
+    console.log('node scripts/setup.mjs [--detect] [--demo] [--tui] [--yes] [--agents-only] [--no-login] [--no-startup] [--apps=codex,claude,hermes] [--exclude=windsurf,kilo] [--sources=teams,bakalari,discord,outlook] [--cache-timeout=180] [--2b|--no-2b] [--groups=m_fre,aj_nov,sk2] [--subjects=M,AJ]');
     return;
   }
   if (!flags.includes('--detect') && !flags.includes('--agents-only') && !flags.includes('--no-login') && !process.stdin.isTTY) throw new Error('Sign-in needs an interactive terminal. Run setup there, or use --no-login to reuse existing accounts.');
@@ -101,7 +101,8 @@ async function demo() {
     { id: 'teams', name: 'Microsoft Teams', description: 'Assignments, teacher announcements and documents through your private Chrome profile.' },
     { id: 'bakalari', name: 'Bakalari', description: 'Homework, marks, timetables and school messages. Sign in securely in the terminal.' },
     { id: 'discord', name: 'Discord', description: 'School channels and relevant conversations through a separate private Chrome profile.' },
-  ], ['teams', 'bakalari', 'discord'], ' ACCOUNT SOURCES ');
+    { id: 'outlook', name: 'Outlook school mail', description: 'Read inbox previews and selected mail bodies from your Microsoft account.' },
+  ], ['teams', 'bakalari', 'discord', 'outlook'], ' ACCOUNT SOURCES ');
   ui.log('Demo sources: ' + selected.join(', '));
   const demoApps = await ui.select([{ id: 'codex', name: 'Codex', description: 'Demo integration; no agent settings will be changed.' }, { id: 'claude', name: 'Claude Code' }, { id: 'hermes', name: 'Hermes' }], ['codex', 'claude', 'hermes'], ' AGENT APPS ', { min: 0 });
   const demoNames = demoApps.map(id => ({ codex: 'Codex', claude: 'Claude Code', hermes: 'Hermes' })[id]).join(' · ') || 'manual MCP import';

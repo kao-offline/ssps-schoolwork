@@ -77,6 +77,10 @@ test('Hermes YAML preserves model configuration and installs filtered tools with
   assert.equal(parsed.mcp_servers.unrelated.url, 'https://example.test/mcp');
   assert.equal(parsed.mcp_servers.discord_live.tools.include.length, 8);
   assert.deepEqual(Object.keys(serverEntries(root, ['bakalari'])), ['schoolwork']);
+  const mailOnly = serverEntries(root, ['outlook']);
+  assert.deepEqual(Object.keys(mailOnly), ['schoolwork'], 'Mail never exposes generic browser actions');
+  assert.equal(mailOnly.schoolwork.env.SCHOOLWORK_SOURCES, 'outlook');
+  assert.equal((parseToml(mergedConfig('', 'toml', mailOnly)) as any).mcp_servers.schoolwork.env.SCHOOLWORK_SOURCES, 'outlook');
 });
 test('installation verifies protected backup, read-back, skill copies and unchanged second run', async () => {
   for (const name of ['class-schoolwork', 'discord-context']) {
