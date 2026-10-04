@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { roleSubjectGroups, timetableSubjectGroups, suggestedSubjectGroups, taskGroupsForSubjects, groupsForClassHalf, classHalfFromGroups, languageGroups, isOseSubject, splitSubjects } from '../src/class-groups.js';
+import { roleSubjectGroups, timetableSubjectGroups, suggestedSubjectGroups, taskGroupsForSubjects, groupsForClassHalf, classHalfFromGroups, languageGroups, isOseSubject, splitSubjects, sameSubjectGroup, mergeSubjectGroups } from '../src/class-groups.js';
 import { DiscordBrowser } from '../src/discord-cache-browser.js';
 
 const timetable = {
@@ -9,6 +9,20 @@ const timetable = {
   Groups: [{ Id: 'm', Name: 'Matematika 2', Abbrev: '2.B 2ABC' }, { Id: 'a', Name: 'Programování 21', Abbrev: '2.B PR21' }, { Id: 'b', Name: 'Programování 22', Abbrev: '2.B PR22' }, { Id: 'sk', Name: '2.B SK1', Abbrev: '2.B SK1' }],
   Days: [{ Atoms: [{ SubjectId: 'math', TeacherId: 'm', GroupIds: ['m'] }, { SubjectId: 'prog', TeacherId: 'a', GroupIds: ['a'] }, { SubjectId: 'prog', TeacherId: 'b', GroupIds: ['b'] }, { SubjectId: 'present', TeacherId: 'p', GroupIds: ['sk'] }] }],
 };
+test('Aj Čer. and Černovická merge with timetable identity and original role preserved', () => {
+  const role = roleSubjectGroups(['Aj Čer.'])[0];
+  const full = { subject: 'ANG', teacher: 'Mgr. Veronika Černovická', group: '2.B BLOK ANG21', groupId: 'SC', source: 'bakalari' as const };
+  assert.equal(role.teacher, full.teacher);
+  assert.equal(sameSubjectGroup(role, full), true);
+  const merged = mergeSubjectGroups([role, full, { ...role, teacher: 'Čer.' }]);
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].groupId, 'SC');
+  assert.equal(merged[0].timetableGroup, full.group);
+  assert.equal(merged[0].role, 'Aj Čer.');
+  assert.equal(suggestedSubjectGroups([full], ['Aj Čer.'])[0].groupId, 'SC');
+  assert.equal(sameSubjectGroup(role, { ...full, teacher: 'Václav Novák' }), false);
+  assert.equal(sameSubjectGroup({ ...role, subject: 'MAT', teacher: 'Čer.' }, { ...full, subject: 'MAT' }), false);
+});
 test('screenshot roles map math, English, programming, presentations, electives and SK independently', () => {
   const groups = roleSubjectGroups(['Real 2.B', 'matika-Součková', 'Trusted', 'Aj Novák', 'PCV | Halbych', 'PVA | Hejduk', 'PDV | Vrána', 'SK2', 'Lineární Algebra', 'oznámení', 'Zástupce předsedy třídy']);
   assert.deepEqual(groups.map(g => g.subject), ['MAT', 'ANG', 'PCV', 'PVA', 'PDV', 'SK', 'OSE']);

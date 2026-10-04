@@ -22,6 +22,27 @@ export function groupsForClassHalf(half: 'SK1' | 'SK2', source: SubjectGroup['so
   });
 }
 export const classRoleChoices = ['matika-Součková', 'Aj Novák', 'PCV | Halbych', 'PVA | Hejduk', 'SK1', 'SK2', 'Lineární Algebra', 'Němčina'];
+// Confirmed Discord abbreviation, scoped to English rather than fuzzy prefixes.
+export function canonicalSubjectGroup(group: SubjectGroup): SubjectGroup {
+  if (group.subject === 'ANG' && (normalizeName(group.teacher || '') === 'cer' || normalizeName(group.group) === 'ajcer')) {
+    return { ...group, teacher: 'Mgr. Veronika Černovická' };
+  }
+  return group;
+}
+export function mergeSubjectGroups(groups: SubjectGroup[]): SubjectGroup[] {
+  const merged: SubjectGroup[] = [];
+  for (const raw of groups) {
+    const group = canonicalSubjectGroup(raw);
+    const existing = merged.find(g => sameSubjectGroup(g, group));
+    if (!existing) merged.push({ ...group });
+    else {
+      existing.groupId ||= group.groupId;
+      existing.timetableGroup ||= group.timetableGroup || (group.source === 'bakalari' ? group.group : undefined);
+      existing.role ||= group.role;
+    }
+  }
+  return merged;
+}
 const canonicalSubject = (subject: string) => isOseSubject(subject) ? 'OSE' : ({ m: 'MAT', aj: 'ANG', cj: 'CJL', f: 'FYZ' })[subjectKey(subject)] || subject.toUpperCase();
 export function roleSubjectGroups(roles: string[]): SubjectGroup[] {
   return roles.flatMap(role => {
@@ -36,7 +57,7 @@ export function roleSubjectGroups(roles: string[]): SubjectGroup[] {
     const subject = /^(matika|matematika)$/i.test(match[1]) ? 'MAT' : /^(aj|angličtina)$/i.test(match[1]) ? 'ANG' : match[1].toUpperCase();
     // Only subject role prefixes, never social, moderation or notification roles.
     if (!['MAT', 'ANG', 'PCV', 'PVA', 'PDV', 'WBA', 'HAR', 'GRS', 'PSI', 'OSE', 'CJL', 'FYZ', 'TEV'].includes(subject)) return [];
-    return [{ subject, group: cleaned, teacher: match[2].trim(), source: 'discord' as const, role }];
+    return [canonicalSubjectGroup({ subject, group: cleaned, teacher: match[2].trim(), source: 'discord', role })];
   });
 }
 export function timetableSubjectGroups(timetable: any): SubjectGroup[] {
@@ -58,6 +79,7 @@ export function timetableSubjectGroups(timetable: any): SubjectGroup[] {
 }
 export function sameSubjectGroup(a: SubjectGroup, b: SubjectGroup) {
   if (a.subject !== b.subject) return false;
+  a = canonicalSubjectGroup(a); b = canonicalSubjectGroup(b);
   const x = normalizeName(a.teacher || a.group), y = normalizeName(b.teacher || b.group);
   return x === y || !!a.teacher && !!b.teacher && (x.endsWith(y) || y.endsWith(x));
 }

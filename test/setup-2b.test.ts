@@ -99,3 +99,43 @@ test('manual class-half and Spanish selections override previous membership for 
     assert.deepEqual(profile?.groups, []);
   } finally { globalThis.fetch = original; }
 });
+
+test('installer shows one Černovická choice when old Čer. roles and timetable overlap', async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async input => String(input).includes('tasks-view')
+    ? new Response('<h1>Tasks View - 2.B</h1><div class="tasks"></div>')
+    : Response.json({
+      Subjects: [{ Id: 'eng', Abbrev: 'ANG' }],
+      Teachers: [{ Id: 'cer', Name: 'Mgr. Veronika Černovická' }],
+      Groups: [{ Id: 'SC', Name: '2.B BLOK ANG21' }],
+      Days: [{ Atoms: [{ SubjectId: 'eng', TeacherId: 'cer', GroupIds: ['SC'] }] }],
+    });
+  let englishScreen = false;
+  const ui = {
+    log() {},
+    select: async (choices: { id: string; name: string }[], defaults: string[], title: string) => {
+      if (title === 'Your ANG group') {
+        englishScreen = true;
+        assert.equal(choices.length, 3, 'Černovická, Novák and manual entry only');
+        assert.equal(choices.filter(g => g.name.includes('Černovická')).length, 1);
+        assert.equal(defaults.length, 1);
+      }
+      return defaults;
+    },
+  };
+  try {
+    await saveClassProfile({ enabled: true, className: '2.B', groups: [], subjects: [], updatedAt: '2026-10-04', discordRoles: ['Aj Čer.'], subjectGroups: [
+      { subject: 'SK', group: 'SK1', source: 'manual' },
+      { subject: 'ANG', group: 'Aj Čer.', teacher: 'Čer.', source: 'discord', role: 'Aj Čer.' },
+      { subject: 'ANG', group: '2.B BLOK ANG21', teacher: 'Mgr. Veronika Černovická', source: 'bakalari', groupId: 'SC' },
+    ] });
+    await configure2B({ enabled: true, ui: null, sources: [], flags: ['--yes'] });
+    assert.equal((await classProfile())?.subjectGroups?.filter(g => g.subject === 'ANG').length, 1, 'Unattended upgrades repair old duplicates');
+    await configure2B({ enabled: true, ui, sources: ['bakalari'], flags: [] });
+    assert.ok(englishScreen);
+    const english = (await classProfile())?.subjectGroups?.filter(g => g.subject === 'ANG');
+    assert.equal(english?.length, 1);
+    assert.equal(english?.[0].teacher, 'Mgr. Veronika Černovická');
+    assert.equal(english?.[0].groupId, 'SC');
+  } finally { globalThis.fetch = original; }
+});

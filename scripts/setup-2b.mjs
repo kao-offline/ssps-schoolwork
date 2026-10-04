@@ -1,6 +1,6 @@
 import { classProfile, fetchTasksView, groupsFromRoles, normalizeName, saveClassProfile } from '../dist/tasks-view.js';
 import { readClassMembers, readClassMember, searchMembers } from '../dist/discord-members.js';
-import { classRoleChoices, roleSubjectGroups, timetableSubjectGroups, suggestedSubjectGroups, sameSubjectGroup, taskGroupsForSubjects, splitSubjects, languageGroups, isOseSubject, classHalfFromGroups, groupsForClassHalf } from '../dist/class-groups.js';
+import { classRoleChoices, roleSubjectGroups, timetableSubjectGroups, suggestedSubjectGroups, sameSubjectGroup, mergeSubjectGroups, taskGroupsForSubjects, splitSubjects, languageGroups, isOseSubject, classHalfFromGroups, groupsForClassHalf } from '../dist/class-groups.js';
 import { bak } from '../dist/bakalari.js';
 import { loadSecret, saveSecret } from '../dist/store.js';
 const values = (flags, name) => flags.find(f => f.startsWith('--' + name + '='))?.slice(name.length + 3).split(',').filter(Boolean);
@@ -15,10 +15,10 @@ export async function configure2B({ enabled, ui, sources, flags }) {
   let subjects = values(flags, 'subjects') ?? (previous?.subjects || []).filter(s => !isOseSubject(s));
   let memberName = previous?.memberName;
   let discordRoles = previous?.discordRoles || [];
-  let subjectGroups = (previous?.subjectGroups || []).map(group => {
+  let subjectGroups = mergeSubjectGroups((previous?.subjectGroups || []).map(group => {
     const language = roleSubjectGroups([group.group]).find(g => ['NJ', 'SJ'].includes(g.subject));
     return language ? { ...group, subject: language.subject, group: language.group, teacher: undefined } : group;
-  }).filter(g => !isOseSubject(g.subject));
+  }).filter(g => !isOseSubject(g.subject)));
   let timetableGroups = [];
   const groupChoices = roleSubjectGroups(classRoleChoices).map(group => ({ ...group, source: 'class-catalogue' }));
   const subjectChoices = new Map(catalogue.items.filter(item => !isOseSubject(item.subject)).map(item => [item.subject, { id: item.subject, name: item.subject, description: 'Read tasks for this subject. No selection means all subjects.' }]));
@@ -82,8 +82,7 @@ export async function configure2B({ enabled, ui, sources, flags }) {
     if (language.length > 1 || language.some(id => !['NJ', 'SJ'].includes(id))) throw new Error('Choose Němčina or Španělština.');
     for (const id of language) selectedGroups.push({ ...languageGroups.find(g => g.subject === id), source: 'manual' });
     for (const subject of [...new Set(['MAT', 'ANG', 'PVA', ...groupChoices.map(g => g.subject)])].filter(subject => subject !== 'SK' && !splitSubjects.includes(subject) && !['NJ', 'SJ'].includes(subject) && !isOseSubject(subject))) {
-      const choices = [];
-      for (const group of [...suggested, ...subjectGroups, ...groupChoices].filter(g => g.subject === subject)) if (!choices.some(g => sameSubjectGroup(g, group))) choices.push(group);
+      const choices = mergeSubjectGroups([...suggested, ...subjectGroups, ...groupChoices].filter(g => g.subject === subject));
       const defaults = choices.flatMap((g, index) => (subjectGroups.length ? subjectGroups : suggested).some(s => sameSubjectGroup(s, g)) ? [String(index)] : []);
       const picked = await ui.select([...choices.map((g, index) => ({ id: String(index), name: (g.teacher ? g.teacher + ' · ' : '') + g.group, description: 'Source: ' + g.source + '. Review the suggestion; timetable can contain parallel groups.' })), { id: 'manual', name: 'Enter another teacher or group', description: 'Use your actual group when it is absent from the sources.' }], defaults, 'Your ' + subject + ' group', { min: 0 });
       for (const id of picked) {
