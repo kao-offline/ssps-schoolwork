@@ -1,5 +1,6 @@
 import { classProfile, fetchTasksView, groupsFromRoles, normalizeName, saveClassProfile } from '../dist/tasks-view.js';
-import { readClassMembers, searchMembers } from '../dist/discord-members.js';
+import { readClassMembers, readClassMember, searchMembers } from '../dist/discord-members.js';
+import { classRoleChoices, roleSubjectGroups, timetableSubjectGroups, suggestedSubjectGroups, sameSubjectGroup, taskGroupsForSubjects } from '../dist/class-groups.js';
 import { bak } from '../dist/bakalari.js';
 import { loadSecret, saveSecret } from '../dist/store.js';
 const values = (flags, name) => flags.find(f => f.startsWith('--' + name + '='))?.slice(name.length + 3).split(',').filter(Boolean);
@@ -13,11 +14,17 @@ export async function configure2B({ enabled, ui, sources, flags }) {
   let groups = values(flags, 'groups') ?? previous?.groups ?? [];
   let subjects = values(flags, 'subjects') ?? previous?.subjects ?? [];
   let memberName = previous?.memberName;
+  let discordRoles = previous?.discordRoles || [];
+  let subjectGroups = previous?.subjectGroups || [];
+  let timetableGroups = [];
+  const groupChoices = roleSubjectGroups(classRoleChoices).map(group => ({ ...group, source: 'class-catalogue' }));
   const subjectChoices = new Map(catalogue.items.map(item => [item.subject, { id: item.subject, name: item.subject, description: 'Read tasks for this subject. No selection means all subjects.' }]));
   const suggestions = new Set(groups);
   if (sources.includes('bakalari') && !flags.includes('--agents-only')) {
     try {
       const timetable = await bak('timetable/permanent');
+      timetableGroups = timetableSubjectGroups(timetable);
+      groupChoices.push(...timetableGroups);
       const ids = new Set((timetable.Days || []).flatMap(day => (day.Atoms || []).flatMap(atom => atom.GroupIds || [])));
       for (const group of timetable.Groups || []) if (ids.has(group.Id)) for (const code of groupsFromRoles([group.Name, group.Abbrev].filter(Boolean), catalogue.groups)) suggestions.add(code);
       for (const subject of timetable.Subjects || []) if (subject.Abbrev) subjectChoices.set(subject.Abbrev, { id: subject.Abbrev, name: subject.Abbrev + ' · ' + subject.Name, description: 'Subject from your Bakalari timetable.' });
@@ -27,28 +34,63 @@ export async function configure2B({ enabled, ui, sources, flags }) {
     if (sources.includes('discord') && !flags.includes('--agents-only')) {
       const mode = await ui.select([{ id: 'discord', name: 'Find my name on Discord', description: 'Read rendered 2.B member names and profile roles locally. You can review every suggested group.' }], [], 'How would you like to choose groups?', { min: 0 });
       if (mode.includes('discord')) {
-        const step = ui.step('Read 2B member roles'); ui.run(step, 'Reading the class server · this can take up to 3 minutes');
+        const query = await ui.input('Search your name', { required: false, description: 'Name or Discord nickname. Leave blank to browse observed members.' });
+        const step = ui.step('Find 2B members'); ui.run(step, 'Loading names only; roles are read after you choose a person');
         let directory;
-        try { directory = await readClassMembers(); if (!directory.members.length) throw new Error('empty directory'); await saveSecret('class-2b-members', directory); ui.ok(step, directory.members.length + ' rendered names'); }
+        try { directory = await readClassMembers(query); if (!directory.members.length) throw new Error('empty directory'); await saveSecret('class-2b-members', directory); ui.ok(step, directory.members.length + ' rendered names'); }
         catch { directory = await loadSecret('class-2b-members'); ui.bad(step, 'Live directory unavailable; saved names may be old'); }
         if (directory?.members.length) {
-          const query = await ui.input('Search your name', { required: false, description: 'Name or Discord nickname. Leave blank to browse observed members.' });
           const matches = searchMembers(directory.members, query);
           if (matches.length) {
             const choices = matches.map((member, index) => ({ id: String(index), name: member.name + ' · ' + member.username, description: member.roles.join(' · ') + ' | Checked: ' + member.checkedAt }));
             const picked = await ui.select(choices, [], 'Choose your Discord profile', { min: 0, max: 1 });
             if (picked.length > 1) throw new Error('Choose one identity only; rerun setup to correct the selection.');
-            if (picked.length) { const member = matches[Number(picked[0])]; memberName = member.name; for (const code of groupsFromRoles(member.roles, catalogue.groups)) suggestions.add(code); }
+            if (picked.length) {
+              let member = matches[Number(picked[0])];
+              const rolesStep = ui.step('Read selected profile roles'); ui.run(rolesStep, 'Reading one profile');
+              try {
+                member = await readClassMember(member.username);
+                const index = directory.members.findIndex(m => m.username === member.username);
+                if (index >= 0) directory.members[index] = member;
+                await saveSecret('class-2b-members', directory);
+                ui.ok(rolesStep, member.roles.length + ' roles verified');
+              } catch {
+                ui.bad(rolesStep, 'Live roles unavailable; review groups manually');
+                await ui.message('Profile roles could not be loaded.', ['Choose your subject groups below.', 'Saved role suggestions, when present, may be old.'], 'Choose groups');
+              }
+              memberName = member.name; discordRoles = member.roles;
+              for (const code of groupsFromRoles(member.roles, catalogue.groups)) suggestions.add(code);
+            }
           } else await ui.message('No matching observed name.', ['The directory is partial; offline members may be absent.', 'Continue with manual group selection.'], 'Choose groups');
         } else await ui.message('Discord names are unavailable.', ['Sign in to the class server, or choose groups manually.'], 'Choose groups');
       }
     }
-    if (!values(flags, 'groups')) groups = await ui.select(catalogue.groups.map(code => ({ id: code, name: code, description: 'Tasks View group. Class-wide tasks are always included. Suggestions can be changed.' })), [...suggestions].filter(g => catalogue.groups.includes(g)), 'Your 2B groups', { min: 0 });
+    const suggested = suggestedSubjectGroups(timetableGroups, discordRoles);
+    groupChoices.push(...suggested, ...subjectGroups);
+    const selectedGroups = [];
+    for (const subject of [...new Set(['MAT', 'ANG', 'PVA', 'PCV', 'PDV', 'SK', ...groupChoices.map(g => g.subject)])]) {
+      const choices = [];
+      for (const group of [...suggested, ...subjectGroups, ...groupChoices].filter(g => g.subject === subject)) if (!choices.some(g => sameSubjectGroup(g, group))) choices.push(group);
+      const defaults = choices.flatMap((g, index) => (subjectGroups.length ? subjectGroups : suggested).some(s => sameSubjectGroup(s, g)) ? [String(index)] : []);
+      const picked = await ui.select([...choices.map((g, index) => ({ id: String(index), name: (g.teacher ? g.teacher + ' · ' : '') + g.group, description: 'Source: ' + g.source + '. Review the suggestion; timetable can contain parallel groups.' })), { id: 'manual', name: 'Enter another teacher or group', description: 'Use your actual group when it is absent from the sources.' }], defaults, 'Your ' + subject + ' group', { min: 0 });
+      for (const id of picked) {
+        if (id === 'manual') {
+          const group = await ui.input(subject + ' teacher / group', { required: true });
+          selectedGroups.push({ subject, group, teacher: subject === 'SK' ? undefined : group, source: 'manual' });
+        }
+        else selectedGroups.push(choices[Number(id)]);
+      }
+    }
+    subjectGroups = selectedGroups;
+    if (!values(flags, 'groups')) {
+      const mapped = taskGroupsForSubjects(subjectGroups, catalogue.groups);
+      groups = await ui.select(catalogue.groups.map(code => ({ id: code, name: code, description: 'Tasks View filter only. It does not list every school group. Class-wide tasks are included.' })), subjectGroups.length ? mapped : [...suggestions].filter(g => catalogue.groups.includes(g)), 'Tasks View filters for your groups', { min: 0 });
+    }
     if (!values(flags, 'subjects')) subjects = await ui.select([...subjectChoices.values()], subjects, 'Your 2B subjects · none means all', { min: 0 });
   }
   if (groups.some(g => !catalogue.groups.includes(g))) throw new Error('Unknown Tasks View group. Use the groups currently offered by Tasks View.');
   if (subjects.some(s => ![...subjectChoices.keys()].some(k => normalizeName(k) === normalizeName(s)))) throw new Error('Unknown 2B subject. Choose a listed subject.');
-  const profile = { enabled: true, className: '2.B', groups, subjects, memberName, updatedAt: new Date().toISOString() };
+  const profile = { enabled: true, className: '2.B', groups, subjects, memberName, subjectGroups, discordRoles, updatedAt: new Date().toISOString() };
   await saveClassProfile(profile);
   return profile;
 }

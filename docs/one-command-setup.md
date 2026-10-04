@@ -26,6 +26,8 @@ The 2B module adds `read_2b_profile` and `list_2b_tasks`. Tasks View is a live a
 
 For noninteractive setup, supply selections explicitly:
 
+Subject groups are selected separately for math, English, programming (PVA), PCV, presentations (PDV), shared SK groups and any other timetable subjects. The installer uses subject/teacher/group links from timetable atoms and the selected person's Discord roles. Parallel programming groups remain choices. The profile preserves these assignments in `subjectGroups` independently of the few filter codes currently offered by Tasks View. Name lookup loads names first and reads roles only for the selected person; it does not open every member profile. A partial directory remains usable when later scrolling fails.
+
 ```powershell
 node scripts/setup.mjs --yes --2b --groups=m_fre,aj_nov,sk2 --subjects=M,AJ
 node scripts/setup.mjs --no-2b

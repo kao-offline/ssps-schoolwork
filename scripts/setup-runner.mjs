@@ -122,7 +122,7 @@ export async function runSetup({ flags = process.argv.slice(2), ui = null } = {}
     phase = 'configuring 2B';
     const profile2B = await configure2B({ enabled: enable2B, ui, sources, flags });
     if (ui && !flags.includes('--yes')) await ui.message('Your workspace is ready to install.', [
-      'Sources: ' + sources.join(', '), 'Apps: ' + (requested?.join(', ') || 'manual import'), '2B module: ' + (enable2B ? 'enabled' : 'off'), 'Accounts stay on your computer.', '2B groups: ' + (profile2B?.groups.join(', ') || 'class-wide only'), '2B subjects: ' + (profile2B?.subjects.join(', ') || 'all'), 'Existing app settings receive protected backups.'
+      'Sources: ' + sources.join(', '), 'Apps: ' + (requested?.join(', ') || 'manual import'), '2B module: ' + (enable2B ? 'enabled' : 'off'), 'Accounts stay on your computer.', 'Subject groups: ' + (profile2B?.subjectGroups?.map(g => g.subject + ': ' + g.group).join(', ') || 'none selected'), 'Tasks View filters: ' + (profile2B?.groups.join(', ') || 'class-wide only'), '2B subjects: ' + (profile2B?.subjects.join(', ') || 'all'), 'Existing app settings receive protected backups.'
     ], 'Install');
     ui?.screen('install');
     phase = 'installing agent integrations';
@@ -144,7 +144,7 @@ export async function runSetup({ flags = process.argv.slice(2), ui = null } = {}
     if (!flags.includes('--agents-only') && !flags.includes('--no-startup') && sources.some(source => ['teams', 'discord'].includes(source)) && process.platform === 'win32') { phase = 'installing hidden Windows startup'; await run('powershell.exe', ['-NoProfile', '-File', join(root, 'scripts/install-context-background.ps1'), ...(sources.includes('teams') ? [] : ['-SkipTeams']), ...(sources.includes('discord') ? [] : ['-SkipDiscord'])]); }
     const workers = [];
     const warm = [];
-    localReport = { module2B: profile2B ? { enabled: profile2B.enabled, groups: profile2B.groups, subjects: profile2B.subjects } : null, installed, failures, workers, warm, manualImport: join(root, 'mcp.local.json'), accountScope: 'Each student signs into their own accounts. Existing model/provider credentials are preserved.', restart: 'Start a new agent session or reload its MCP servers and skills.' };
+    localReport = { module2B: profile2B ? { enabled: profile2B.enabled, groups: profile2B.groups, subjects: profile2B.subjects, subjectGroups: profile2B.subjectGroups } : null, installed, failures, workers, warm, manualImport: join(root, 'mcp.local.json'), accountScope: 'Each student signs into their own accounts. Existing model/provider credentials are preserved.', restart: 'Start a new agent session or reload its MCP servers and skills.' };
     await writeFile(join(root, 'setup-report.local.json'), JSON.stringify(localReport, null, 2) + '\n', { mode: 0o600 });
     if (!flags.includes('--agents-only')) {
       if (!ui) console.log('[4/5] PREPARE — warming initial views; rest loads in background (partial history).');

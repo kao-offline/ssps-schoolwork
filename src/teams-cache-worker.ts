@@ -143,10 +143,12 @@ export class BackgroundTeams {
     if (method === 'pause') { this.paused = true; await this.queue.run(() => this.browser.close()); await this.cache.flush(); return this.status(); }
     if (method === 'resume') { this.paused = false; this.leaseUntil = 0; this.refresh(); return this.status(); }
     if (method === 'tools') return this.browser.tools();
-    if (method === 'class_members') {
+    if (method === 'class_members' || method === 'class_member') {
       if (this.source !== 'discord' || !(this.browser instanceof DiscordBrowser)) throw new Error('Class members require the Discord reader.');
-      this.leaseUntil = this.now() + 180000;
-      try { return await this.queue.run(() => (this.browser as DiscordBrowser).classMembers()); }
+      const args = z.object({ query: z.string().max(100).default(''), username: z.string().min(1).max(100).optional() }).parse(input);
+      if (method === 'class_member' && !args.username) throw new Error('Select a Discord member first.');
+      this.leaseUntil = this.now() + 90000;
+      try { return await this.queue.run<unknown>(() => method === 'class_member' ? (this.browser as DiscordBrowser).classMember(args.username!) : (this.browser as DiscordBrowser).classMembers(args.query)); }
       finally { this.leaseUntil = 0; }
     }
     if (method === 'browser') {

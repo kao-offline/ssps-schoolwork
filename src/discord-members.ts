@@ -1,7 +1,7 @@
 import { cacheRequest } from './teams-cache-client.js';
 import { normalizeName } from './tasks-view.js';
 export const classGuild = '1413121869867126856';
-export type ClassMember = { name: string; username: string; roles: string[]; sourceUrl: string; checkedAt: string };
+export type ClassMember = { name: string; username: string; roles: string[]; sourceUrl: string; checkedAt: string; rolesCheckedAt?: string };
 // Fixed class server DOM reader; no API, storage, cookies or message content.
 export const memberDirectoryReader = `async () => {
   const wait = () => new Promise(r => setTimeout(r, 300));
@@ -13,7 +13,7 @@ export const memberDirectoryReader = `async () => {
   const label = e => [...e.querySelectorAll('[role="img"][aria-label],img[alt]')].map(img => (img.getAttribute('aria-label') || img.getAttribute('alt') || '').trim()).find(value => value && !/^(Ikona aplikace|Application icon|App icon|Ověřená aplikace|Verified App|Aplikace)$/i.test(value) && !/^(Ikona aplikace|Application icon|App icon) /i.test(value)) || '';
   const rows = () => [...document.querySelectorAll('[data-list-id^="members"] [data-list-item-id^="members-"]')].filter(e => e.getClientRects().length && label(e));
   for (let i = 0; !rows().length && i < 20; i++) await wait();
-  return rows().map(e => ({ id: e.getAttribute('data-list-item-id'), label: label(e) }));
+  return rows().map(e => ({ id: e.getAttribute('data-list-item-id'), label: label(e), name: e.innerText.split('\\n').map(s => s.trim()).find(Boolean) || label(e).split(',')[0].trim() }));
 }`;
 export function memberProfileReader(id: string, open = true, expectedUsername = '') {
   return `async () => {
@@ -49,6 +49,9 @@ export function searchMembers(members: ClassMember[], query: string) {
   const term = normalizeName(query);
   return members.filter(member => normalizeName(member.name + ' ' + member.username).includes(term));
 }
-export async function readClassMembers() {
-  return await cacheRequest('class_members', {}, 'discord') as { members: ClassMember[]; complete: false; coverage: string };
+export async function readClassMembers(query = '') {
+  return await cacheRequest('class_members', { query }, 'discord') as { members: ClassMember[]; complete: false; coverage: string; warning?: string };
+}
+export async function readClassMember(username: string) {
+  return await cacheRequest('class_member', { username }, 'discord') as ClassMember;
 }
