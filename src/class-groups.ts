@@ -1,12 +1,35 @@
 import { normalizeName, subjectKey } from './tasks-view.js';
 
 export type SubjectGroup = { subject: string; group: string; teacher?: string; source: 'discord' | 'bakalari' | 'manual' | 'class-catalogue'; groupId?: string; timetableGroup?: string; role?: string };
+export const splitSubjects = ['HAR', 'WBA', 'PCV', 'GRS', 'TEV', 'PDV', 'PSI'];
+export const languageGroups: SubjectGroup[] = [
+  { subject: 'NJ', group: 'Němčina', source: 'class-catalogue' },
+  { subject: 'SJ', group: 'Španělština', source: 'class-catalogue' },
+];
+export const isOseSubject = (subject: string) => /^ose\d*$/.test(normalizeName(subject)) || normalizeName(subject) === 'linearnialgebra';
+export function classHalfFromGroups(groups: SubjectGroup[]) {
+  const explicit = groups.filter(g => g.subject === 'SK');
+  const candidates = [...new Set((explicit.length ? explicit : groups.filter(g => splitSubjects.includes(g.subject))).flatMap(g => {
+    const half = normalizeName(g.group).match(/sk([12])$/)?.[1];
+    return half ? ['SK' + half] : [];
+  }))];
+  return candidates.length === 1 ? candidates[0] as 'SK1' | 'SK2' : undefined;
+}
+export function groupsForClassHalf(half: 'SK1' | 'SK2', source: SubjectGroup['source'] = 'manual', timetable: SubjectGroup[] = []): SubjectGroup[] {
+  return ['SK', ...splitSubjects].map(subject => {
+    const matching = timetable.find(g => g.subject === subject && normalizeName(g.group).endsWith(half.toLowerCase()));
+    return { subject, group: half, source, ...(matching?.groupId ? { groupId: matching.groupId } : {}) };
+  });
+}
 export const classRoleChoices = ['matika-Součková', 'Aj Novák', 'PCV | Halbych', 'PVA | Hejduk', 'SK1', 'SK2', 'Lineární Algebra', 'Němčina'];
-const canonicalSubject = (subject: string) => ({ m: 'MAT', aj: 'ANG', cj: 'CJL', f: 'FYZ' })[subjectKey(subject)] || subject.toUpperCase();
+const canonicalSubject = (subject: string) => isOseSubject(subject) ? 'OSE' : ({ m: 'MAT', aj: 'ANG', cj: 'CJL', f: 'FYZ' })[subjectKey(subject)] || subject.toUpperCase();
 export function roleSubjectGroups(roles: string[]): SubjectGroup[] {
   return roles.flatMap(role => {
     const cleaned = role.trim();
-    if (['linearni algebra', 'nemcina'].some(name => normalizeName(name) === normalizeName(cleaned))) return [{ subject: cleaned, group: cleaned, source: 'discord' as const, role }];
+    const language = normalizeName(cleaned);
+    if (language === 'linearnialgebra') return [{ subject: 'OSE', group: cleaned, source: 'discord' as const, role }];
+    if (['nemcina', 'nemeckyjazyk', 'nj'].includes(language)) return [{ ...languageGroups[0], source: 'discord' as const, role }];
+    if (['spanel', 'spanelstina', 'spanelskyjazyk', 'sj'].includes(language)) return [{ ...languageGroups[1], source: 'discord' as const, role }];
     if (/^SK[12]$/i.test(cleaned)) return [{ subject: 'SK', group: cleaned.toUpperCase(), source: 'discord' as const, role }];
     const match = cleaned.match(/^(matika|matematika|aj|angličtina|[A-Z][A-Z0-9]{1,7})\s*(?:[|:-]\s*|\s+)(.+)$/i);
     if (!match) return [];

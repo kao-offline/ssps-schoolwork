@@ -39,13 +39,16 @@ export function createTui({ output = process.stdout, input = process.stdin, enab
     if (action === 'toggle') {
       selection.focus = index;
       const id = selection.choices[index]?.id;
-      if (id) { if (selection.selected.has(id)) selection.selected.delete(id); else selection.selected.add(id); }
+      if (id) {
+        if (selection.selected.has(id)) selection.selected.delete(id);
+        else { if (selection.max === 1) selection.selected.clear(); selection.selected.add(id); }
+      }
       selection.error = '';
-    } else if (action === 'all') selection.selected = new Set(selection.choices.map(choice => choice.id));
+    } else if (action === 'all') selection.selected = new Set(selection.max === 1 ? [selection.choices[selection.focus]?.id].filter(Boolean) : selection.choices.map(choice => choice.id));
     else if (action === 'none') selection.selected.clear();
     else if (action === 'continue') {
-      if (selection.selected.size > selection.max) selection.error = 'Choose only one profile.';
-      else if (selection.selected.size < selection.min) selection.error = 'Select at least one connection.';
+      if (selection.selected.size > selection.max) selection.error = 'Select only one option.';
+      else if (selection.selected.size < selection.min) selection.error = 'Select at least one option.';
       else {
         const current = selection;
         selection = null;

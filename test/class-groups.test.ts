@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { roleSubjectGroups, timetableSubjectGroups, suggestedSubjectGroups, taskGroupsForSubjects } from '../src/class-groups.js';
+import { roleSubjectGroups, timetableSubjectGroups, suggestedSubjectGroups, taskGroupsForSubjects, groupsForClassHalf, classHalfFromGroups, languageGroups, isOseSubject, splitSubjects } from '../src/class-groups.js';
 import { DiscordBrowser } from '../src/discord-cache-browser.js';
 
 const timetable = {
@@ -11,10 +11,26 @@ const timetable = {
 };
 test('screenshot roles map math, English, programming, presentations, electives and SK independently', () => {
   const groups = roleSubjectGroups(['Real 2.B', 'matika-Součková', 'Trusted', 'Aj Novák', 'PCV | Halbych', 'PVA | Hejduk', 'PDV | Vrána', 'SK2', 'Lineární Algebra', 'oznámení', 'Zástupce předsedy třídy']);
-  assert.deepEqual(groups.map(g => g.subject), ['MAT', 'ANG', 'PCV', 'PVA', 'PDV', 'SK', 'Lineární Algebra']);
+  assert.deepEqual(groups.map(g => g.subject), ['MAT', 'ANG', 'PCV', 'PVA', 'PDV', 'SK', 'OSE']);
   assert.equal(groups.find(g => g.subject === 'PVA')?.teacher, 'Hejduk');
   assert.deepEqual(taskGroupsForSubjects(groups, ['m_fre', 'aj_nov', 'sk2']), ['aj_nov', 'sk2']);
   assert.deepEqual(taskGroupsForSubjects([{ subject: 'MAT', group: 'Matematika', teacher: 'Mgr. Jan Freisleben', source: 'bakalari' }], ['m_fre']), ['m_fre']);
+});
+test('one class half covers every approved shared subject without requiring teachers', () => {
+  for (const half of ['SK1', 'SK2'] as const) {
+    const groups = groupsForClassHalf(half);
+    assert.deepEqual(groups.map(g => g.subject), ['SK', ...splitSubjects]);
+    assert.ok(groups.every(g => g.group === half && !g.teacher));
+    assert.equal(classHalfFromGroups(groups), half);
+  }
+  assert.equal(classHalfFromGroups([{ subject: 'PDV', group: '2.B SK1', source: 'bakalari' }, { subject: 'HAR', group: 'SK2', source: 'manual' }]), undefined);
+});
+test('German and Spanish are the only language choices; linear algebra and OSE1 are OSE', () => {
+  assert.deepEqual(languageGroups.map(g => [g.subject, g.group]), [['NJ', 'Němčina'], ['SJ', 'Španělština']]);
+  assert.deepEqual(roleSubjectGroups(['Němčina', 'Španěl', 'Španělština', 'Lineární Algebra']).map(g => g.subject), ['NJ', 'SJ', 'SJ', 'OSE']);
+  assert.equal(isOseSubject('OSE1'), true);
+  assert.equal(isOseSubject('Lineární Algebra'), true);
+  assert.equal(isOseSubject('NJ'), false);
 });
 test('parallel timetable groups remain choices and Discord subject roles override suggestions', () => {
   const choices = timetableSubjectGroups(timetable);

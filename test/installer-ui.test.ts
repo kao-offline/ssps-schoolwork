@@ -98,10 +98,29 @@ test('Continue button enforces required selection and accepts mouse activation',
     const button = view.targets.find(target => target.action === 'continue')!;
     const click = (target: any) => input.emit('data', `\x1b[<0;${target.x + 1};${target.y + 1}M`);
     click(button);
-    assert.ok(stripVTControlCharacters(output.last).includes('Select at least one connection'));
+    assert.ok(stripVTControlCharacters(output.last).includes('Select at least one option'));
     click(view.targets.find(target => target.action === 'toggle'));
     click(button);
     assert.deepEqual(await result, ['teams']);
+  } finally { ui.stop(); }
+});
+
+test('single-choice class half and language switch directly with keyboard and mouse', async () => {
+  const input = terminalInput();
+  const output = Object.assign(new EventEmitter(), { columns: 100, rows: 24, write() {} });
+  const ui = createTui({ input, output, enabled: true })!;
+  try {
+    const halves = [{ id: 'SK1', name: 'SK1' }, { id: 'SK2', name: 'SK2' }];
+    const half = ui.select(halves, ['SK1'], 'Your class half', { min: 1, max: 1 });
+    input.emit('data', '\x1b[B \r');
+    assert.deepEqual(await half, ['SK2']);
+    const languages = [{ id: 'NJ', name: 'Němčina' }, { id: 'SJ', name: 'Španělština' }];
+    const language = ui.select(languages, ['NJ'], 'Your language', { min: 0, max: 1 });
+    const view = renderDashboard({ width: 100, height: 24, selection: { choices: languages, selected: new Set(['NJ']), title: 'Your language', focus: 0 } });
+    const target = view.targets.find(target => target.action === 'toggle' && target.index === 1)!;
+    input.emit('data', `\x1b[<0;${target.x + 1};${target.y + 1}M`);
+    input.emit('data', '\r');
+    assert.deepEqual(await language, ['SJ']);
   } finally { ui.stop(); }
 });
 

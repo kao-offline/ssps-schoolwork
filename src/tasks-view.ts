@@ -4,7 +4,7 @@ import { request, boundedBytes } from './http.js';
 import { loadSecret, saveSecret } from './store.js';
 
 export const tasksViewUrl = 'https://tasks-view.matejruzicka.cz/';
-export type ClassProfile = { enabled: boolean; className: '2.B'; groups: string[]; subjects: string[]; memberName?: string; subjectGroups?: import('./class-groups.js').SubjectGroup[]; discordRoles?: string[]; updatedAt: string };
+export type ClassProfile = { enabled: boolean; className: '2.B'; groups: string[]; subjects: string[]; memberName?: string; classHalf?: 'SK1' | 'SK2'; subjectGroups?: import('./class-groups.js').SubjectGroup[]; discordRoles?: string[]; updatedAt: string };
 export const groupCode = /^[a-z0-9_:-]{1,100}$/i;
 const text = (html: string) => convert(html, { wordwrap: false, selectors: [{ selector: 'a', options: { ignoreHref: true } }] }).trim();
 export function parseTasksView(html: string) {
