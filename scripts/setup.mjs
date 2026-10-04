@@ -7,7 +7,7 @@ import { createTui, recap, runTui, tuiEnabled } from './tui.mjs';
 const root = resolve(import.meta.dirname, '..');
 const flags = process.argv.slice(2);
 const args = [`--env-file-if-exists=${join(root, '.env')}`];
-const ui = !flags.includes('--detect') && tuiEnabled() ? createTui() : null;
+const ui = !flags.includes('--detect') && !flags.includes('--help') && tuiEnabled() ? createTui() : null;
 let uiActive = Boolean(ui);
 function run(command, parameters, input) {
   if (ui && uiActive) return runTui(spawn, ui, command, parameters, { input, cwd: root });
@@ -23,7 +23,7 @@ async function main() {
   if (flags.includes('--demo') && !flags.includes('--detect')) { await demo(); return; }
   if (Number(process.versions.node.split('.')[0]) < 22 || (Number(process.versions.node.split('.')[0]) === 22 && Number(process.versions.node.split('.')[1]) < 13)) throw new Error('Install Node.js 22.13 or later, then rerun setup.');
   if (flags.includes('--help')) {
-    console.log('node scripts/setup.mjs [--detect] [--demo] [--agents-only] [--no-login] [--no-startup] [--apps=codex,claude,hermes] [--exclude=windsurf,kilo] [--sources=teams,bakalari,discord] [--cache-timeout=180]');
+    console.log('node scripts/setup.mjs [--detect] [--demo] [--yes] [--agents-only] [--no-login] [--no-startup] [--apps=codex,claude,hermes] [--exclude=windsurf,kilo] [--sources=teams,bakalari,discord] [--cache-timeout=180]');
     return;
   }
   if (!flags.includes('--detect') && !flags.includes('--agents-only') && !flags.includes('--no-login') && !process.stdin.isTTY) throw new Error('Sign-in needs an interactive terminal. Run setup there, or use --no-login to reuse existing accounts.');
@@ -58,6 +58,8 @@ async function main() {
     if (!npmCli) throw new Error('npm is required to build. Run this command using npm run setup.');
     if (!ui) console.log('[1/5] SETUP — building local server...');
     else ui.run(buildStep, 'tsc');
+    // Existing readers must reload newly built RPC methods on a source-only update.
+    if (!flags.includes('--detect') && !flags.includes('--agents-only') && existsSync(join(root, 'dist/teams-cache-client.js'))) await run(process.execPath, [...args, join(root, 'scripts/setup-stop-workers.mjs')]);
     await run(process.execPath, [npmCli, 'run', 'build', '--silent']);
     ui?.ok(buildStep, 'built');
   } else ui?.ok(buildStep, 'already built');
@@ -66,6 +68,7 @@ async function main() {
   // The runner owns its own dashboard; hand the terminal back first.
   uiActive = false;
   ui?.stop();
+  if (ui) recap([['Dependencies', 'ready'], ['Local server', 'ready']]);
   await run(process.execPath, [...args, join(root, 'scripts/setup-runner.mjs'), ...flags]);
 }
 main().catch(error => { uiActive = false; ui?.stop(); console.error(error.message); process.exitCode = 1; });
