@@ -47,12 +47,12 @@ test('interactive setup searches names before reading one role profile and saves
     const profile = await classProfile();
     assert.deepEqual(calls.slice(0, 3), ['query', 'class_members', 'class_member']);
     assert.deepEqual(profile?.groups, ['aj_nov', 'sk2']);
-    assert.equal(profile?.subjectGroups?.find(g => g.subject === 'MAT')?.teacher, 'Součková');
+    assert.equal(profile?.subjectGroups?.find(g => g.subject === 'MAT')?.teacher, 'Mgr. Monika Součková');
     assert.equal(profile?.classHalf, 'SK2');
     assert.equal(profile?.subjectGroups?.find(g => g.subject === 'PCV')?.group, 'SK2');
     assert.equal(profile?.subjectGroups?.find(g => g.subject === 'PCV')?.teacher, undefined);
     assert.equal(profile?.subjectGroups?.filter(g => g.subject === 'PVA').length, 1);
-    assert.equal(profile?.subjectGroups?.find(g => g.subject === 'PVA')?.teacher, 'Hejduk');
+    assert.equal(profile?.subjectGroups?.find(g => g.subject === 'PVA')?.teacher, 'Michal Hejduk');
     assert.equal(profile?.subjectGroups?.find(g => g.subject === 'PVA')?.groupId, 'a');
     assert.equal(profile?.subjectGroups?.find(g => g.subject === 'PDV')?.group, 'SK2');
     assert.equal(profile?.subjectGroups?.find(g => g.subject === 'NJ')?.group, 'Němčina');
@@ -116,7 +116,7 @@ test('installer shows one Černovická choice when old Čer. roles and timetable
     select: async (choices: { id: string; name: string }[], defaults: string[], title: string) => {
       if (title === 'Your ANG group') {
         englishScreen = true;
-        assert.equal(choices.length, 3, 'Černovická, Novák and manual entry only');
+        assert.equal(choices.length, 7, 'Six English groups and manual entry');
         assert.equal(choices.filter(g => g.name.includes('Černovická')).length, 1);
         assert.equal(defaults.length, 1);
       }
@@ -137,5 +137,39 @@ test('installer shows one Černovická choice when old Čer. roles and timetable
     assert.equal(english?.length, 1);
     assert.equal(english?.[0].teacher, 'Mgr. Veronika Černovická');
     assert.equal(english?.[0].groupId, 'SC');
+  } finally { globalThis.fetch = original; }
+});
+
+test('every known group is selectable without Discord roles or a connected timetable', async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => new Response('<h1>Tasks View - 2.B</h1><div class="tasks"></div>');
+  const screens = new Map<string, string[]>();
+  const expected: Record<string, string[]> = {
+    'Your MAT group': ['Monika Součková', 'Marcel Frei', 'Pavel Miškovský', 'matika-Zýková'],
+    'Your ANG group': ['Veronika Černovická', 'Filip Hanuš', 'Jan Kratochvíle', 'Václav Novák', 'Aj Přech', 'Aj Čamrda | Doneva'],
+    'Your PVA group': ['Šimon Inneman', 'Michal Hejduk', 'Šimon Šrámek', 'Lukáš Procházka'],
+  };
+  const ui = {
+    select: async (choices: { id: string; name: string }[], defaults: string[], title: string) => {
+      screens.set(title, choices.map(g => g.name));
+      if (expected[title]) {
+        assert.equal(choices.length, expected[title].length + 1);
+        for (const name of expected[title]) assert.equal(choices.filter(g => g.name.includes(name)).length, 1, name);
+        assert.deepEqual(defaults, [], 'Available catalogue groups are not inferred membership');
+        const pick = title === 'Your MAT group' ? 'Marcel Frei' : title === 'Your ANG group' ? 'Filip Hanuš' : 'Šimon Inneman';
+        return [choices.find(g => g.name.includes(pick))!.id];
+      }
+      return title === 'Your class half' ? ['SK2'] : title === 'Your language' ? ['SJ'] : defaults;
+    },
+  };
+  try {
+    await saveClassProfile({ enabled: true, className: '2.B', groups: [], subjects: [], subjectGroups: [], discordRoles: [], updatedAt: '2026-10-04' });
+    await configure2B({ enabled: true, ui, sources: [], flags: [] });
+    assert.deepEqual(screens.get('Your language'), ['Němčina', 'Španělština']);
+    assert.deepEqual(screens.get('Your class half'), ['SK1', 'SK2']);
+    assert.ok(![...screens.keys()].some(title => /^Your (HAR|WBA|PCV|GRS|TEV|PDV|PSI|OSE) group$/.test(title)));
+    const profile = await classProfile();
+    assert.deepEqual(profile?.subjectGroups?.filter(g => ['MAT', 'ANG', 'PVA'].includes(g.subject)).map(g => g.teacher), ['Marcel Frei', 'Filip Hanuš', 'Bc. Šimon Inneman']);
+    assert.equal(profile?.subjectGroups?.find(g => g.subject === 'PVA')?.group, 'PR11');
   } finally { globalThis.fetch = original; }
 });

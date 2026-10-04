@@ -1,6 +1,6 @@
 import { classProfile, fetchTasksView, groupsFromRoles, normalizeName, saveClassProfile } from '../dist/tasks-view.js';
 import { readClassMembers, readClassMember, searchMembers } from '../dist/discord-members.js';
-import { classRoleChoices, roleSubjectGroups, timetableSubjectGroups, suggestedSubjectGroups, sameSubjectGroup, mergeSubjectGroups, taskGroupsForSubjects, splitSubjects, languageGroups, isOseSubject, classHalfFromGroups, groupsForClassHalf } from '../dist/class-groups.js';
+import { classGroupChoices, roleSubjectGroups, timetableSubjectGroups, suggestedSubjectGroups, sameSubjectGroup, mergeSubjectGroups, taskGroupsForSubjects, splitSubjects, languageGroups, isOseSubject, classHalfFromGroups, groupsForClassHalf } from '../dist/class-groups.js';
 import { bak } from '../dist/bakalari.js';
 import { loadSecret, saveSecret } from '../dist/store.js';
 const values = (flags, name) => flags.find(f => f.startsWith('--' + name + '='))?.slice(name.length + 3).split(',').filter(Boolean);
@@ -20,7 +20,7 @@ export async function configure2B({ enabled, ui, sources, flags }) {
     return language ? { ...group, subject: language.subject, group: language.group, teacher: undefined } : group;
   }).filter(g => !isOseSubject(g.subject)));
   let timetableGroups = [];
-  const groupChoices = roleSubjectGroups(classRoleChoices).map(group => ({ ...group, source: 'class-catalogue' }));
+  const groupChoices = classGroupChoices.map(group => ({ ...group }));
   const subjectChoices = new Map(catalogue.items.filter(item => !isOseSubject(item.subject)).map(item => [item.subject, { id: item.subject, name: item.subject, description: 'Read tasks for this subject. No selection means all subjects.' }]));
   const suggestions = new Set(groups);
   if (sources.includes('bakalari') && !flags.includes('--agents-only')) {

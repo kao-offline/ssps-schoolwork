@@ -26,7 +26,7 @@ test('Aj Čer. and Černovická merge with timetable identity and original role 
 test('screenshot roles map math, English, programming, presentations, electives and SK independently', () => {
   const groups = roleSubjectGroups(['Real 2.B', 'matika-Součková', 'Trusted', 'Aj Novák', 'PCV | Halbych', 'PVA | Hejduk', 'PDV | Vrána', 'SK2', 'Lineární Algebra', 'oznámení', 'Zástupce předsedy třídy']);
   assert.deepEqual(groups.map(g => g.subject), ['MAT', 'ANG', 'PCV', 'PVA', 'PDV', 'SK', 'OSE']);
-  assert.equal(groups.find(g => g.subject === 'PVA')?.teacher, 'Hejduk');
+  assert.equal(groups.find(g => g.subject === 'PVA')?.teacher, 'Michal Hejduk');
   assert.deepEqual(taskGroupsForSubjects(groups, ['m_fre', 'aj_nov', 'sk2']), ['aj_nov', 'sk2']);
   assert.deepEqual(taskGroupsForSubjects([{ subject: 'MAT', group: 'Matematika', teacher: 'Mgr. Jan Freisleben', source: 'bakalari' }], ['m_fre']), ['m_fre']);
 });
@@ -51,8 +51,8 @@ test('parallel timetable groups remain choices and Discord subject roles overrid
   assert.equal(choices.filter(g => g.subject === 'PVA').length, 2);
   assert.ok(!suggestedSubjectGroups(choices, []).some(g => g.subject === 'PVA'));
   const suggested = suggestedSubjectGroups(choices, ['matika-Součková', 'PVA | Hejduk', 'SK2']);
-  assert.deepEqual(suggested.filter(g => g.subject === 'PVA').map(g => g.teacher), ['Hejduk']);
-  assert.deepEqual(suggested.filter(g => g.subject === 'MAT').map(g => g.teacher), ['Součková']);
+  assert.deepEqual(suggested.filter(g => g.subject === 'PVA').map(g => g.teacher), ['Michal Hejduk']);
+  assert.deepEqual(suggested.filter(g => g.subject === 'MAT').map(g => g.teacher), ['Mgr. Monika Součková']);
   assert.equal(suggested.find(g => g.subject === 'PDV')?.group, 'SK2', 'Use the SK2 role for the shared presentation split');
   assert.equal(suggested.find(g => g.subject === 'PDV')?.teacher, undefined, 'Do not invent the other group teacher');
   assert.ok(choices.some(g => g.subject === 'PDV' && g.groupId === 'sk'));

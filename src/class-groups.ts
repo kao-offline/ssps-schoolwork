@@ -21,9 +21,26 @@ export function groupsForClassHalf(half: 'SK1' | 'SK2', source: SubjectGroup['so
     return { subject, group: half, source, ...(matching?.groupId ? { groupId: matching.groupId } : {}) };
   });
 }
-export const classRoleChoices = ['matika-Součková', 'Aj Novák', 'PCV | Halbych', 'PVA | Hejduk', 'SK1', 'SK2', 'Lineární Algebra', 'Němčina'];
-// Confirmed Discord abbreviation, scoped to English rather than fuzzy prefixes.
+// Available to every student. Unknown teacher identities remain role labels.
+export const classGroupChoices: SubjectGroup[] = [
+  { subject: 'MAT', group: 'matika-Součková', teacher: 'Mgr. Monika Součková', source: 'class-catalogue' },
+  { subject: 'MAT', group: 'matika-Frei', teacher: 'Marcel Frei', source: 'class-catalogue' },
+  { subject: 'MAT', group: 'matika-Miškovský', teacher: 'Pavel Miškovský', source: 'class-catalogue' },
+  { subject: 'MAT', group: 'matika-Zýková', source: 'class-catalogue' },
+  { subject: 'ANG', group: 'Aj Čer.', teacher: 'Mgr. Veronika Černovická', source: 'class-catalogue' },
+  { subject: 'ANG', group: 'Aj Hanuš', teacher: 'Filip Hanuš', source: 'class-catalogue' },
+  { subject: 'ANG', group: 'Aj Kratochvíle', teacher: 'Jan Kratochvíle', source: 'class-catalogue' },
+  { subject: 'ANG', group: 'Aj Novák', teacher: 'Václav Novák', source: 'class-catalogue' },
+  { subject: 'ANG', group: 'Aj Přech', source: 'class-catalogue' },
+  { subject: 'ANG', group: 'Aj Čamrda | Doneva', source: 'class-catalogue' },
+  { subject: 'PVA', group: 'PR11', teacher: 'Bc. Šimon Inneman', source: 'class-catalogue' },
+  { subject: 'PVA', group: 'PR21', teacher: 'Michal Hejduk', role: 'PVA | Hejduk', source: 'class-catalogue' },
+  { subject: 'PVA', group: 'PR22', teacher: 'Šimon Šrámek', source: 'class-catalogue' },
+  { subject: 'PVA', group: 'PR31', teacher: 'Lukáš Procházka', source: 'class-catalogue' },
+];
 export function canonicalSubjectGroup(group: SubjectGroup): SubjectGroup {
+  const known = classGroupChoices.find(g => g.subject === group.subject && [g.group, g.role].some(label => label && [group.group, group.role].some(value => value && normalizeName(value) === normalizeName(label))));
+  if (known) return { ...group, teacher: known.teacher };
   if (group.subject === 'ANG' && (normalizeName(group.teacher || '') === 'cer' || normalizeName(group.group) === 'ajcer')) {
     return { ...group, teacher: 'Mgr. Veronika Černovická' };
   }
