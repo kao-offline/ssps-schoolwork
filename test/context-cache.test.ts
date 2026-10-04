@@ -140,7 +140,7 @@ test('HTTP/MCP cached reads do not wait for blocked prefetch; local RPC rejects 
   const client = new Client({ name: 'cache-integration', version: '1' });
   await server.connect(b); await client.connect(a);
   try {
-    assert.equal((await client.listTools()).tools.length, 21);
+    assert.equal((await client.listTools()).tools.length, 23);
     const result = await client.callTool({ name: 'read_cached_context', arguments: { source: 'teams', id: 'assignments/upcoming' } });
     assert.ok(!result.isError);
     const data = JSON.parse((result.content as { text: string }[])[0].text).data;

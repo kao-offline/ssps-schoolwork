@@ -12,6 +12,7 @@ const directory = await mkdtemp(join(tmpdir(), 'schoolwork-browser-test-'));
 process.env.SCHOOLWORK_DATA_DIR = directory;
 const { noticeReader, evaluationJson } = await import('../dist/browser-notices.js');
 const { discordDomReader } = await import('../dist/discord-cache-browser.js');
+const { memberDirectoryReader, memberProfileReader } = await import('../dist/discord-members.js');
 const http = createServer((req, res) => {
   res.setHeader('Content-Type', 'text/html');
   if (req.url === '/sign-in-fixture') {
@@ -21,6 +22,10 @@ const http = createServer((req, res) => {
     res.end('<h1>Notification fixture</h1><script>setTimeout(()=>{const n=document.createElement("div");n.setAttribute("role","alert");n.innerText="Teacher updated the deadline";document.body.append(n);setTimeout(()=>n.remove(),1000)},3000)</script>');
   } else if (req.url === '/discord-fixture') {
     res.end('<nav><div data-list-item-id="guildsnav___123456789012345678" aria-label="School"></div><a href="/channels/@me/223456789012345678">DM fixture</a></nav><h1>Homework</h1><ol data-list-id="chat-messages"><li id="chat-messages-223456789012345678-323456789012345678">Teacher: revised project brief<time datetime="2026-10-02T12:00:00Z"></time></li></ol>');
+  } else if (req.url === '/discord-members-fixture') {
+    res.end(`<h1>Class members fixture</h1><div role="button" aria-label="Show Member List" onclick="document.querySelector('#members').hidden=false">Members</div><div id="members" hidden data-list-id="members-fixture"><div data-list-item-id="members-fixture-1" onclick="show('Student One','m_fre')"><img alt=" "><div role="img" aria-label="student.one, Online"><img alt=" "></div>Student One</div><div data-list-item-id="members-fixture-2" onclick="show('Student Two','sk2')"><img alt=" "><img alt="student.two, Online">Student Two</div></div><script>
+    function show(name,role){const d=document.createElement('div');d.setAttribute('role','dialog');const h=document.createElement('h1');h.textContent='User Profile for '+name;const ul=document.createElement('ul');ul.setAttribute('aria-label','Roles');const li=document.createElement('li');li.textContent='Class member';ul.append(li);const more=document.createElement('div');more.setAttribute('role','button');more.textContent='+1';more.onclick=()=>{const extra=document.createElement('li');extra.textContent=role;ul.append(extra);more.remove()};d.append(h,ul,more);document.body.append(d)}
+    document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelector('[role="dialog"]')?.remove()});</script>`);
   } else if (req.url === '/download') {
     res.setHeader('Content-Type', 'text/plain');
     res.setHeader('Content-Disposition', 'attachment; filename="brief.txt"');
@@ -73,6 +78,21 @@ async function navigate(path) {
       assert.ok(!clicked.isError, JSON.stringify(clicked));
       await client.callTool({ name: 'browser_wait_for', arguments: { time: 1 } });
     }
+    if (path === '/discord-members-fixture') {
+      async function evaluate(fn) {
+        const result = await client.callTool({ name: 'browser_evaluate', arguments: { function: fn } });
+        assert.ok(!result.isError, JSON.stringify(result.content));
+        return evaluationJson(result.content.filter(c => c.type === 'text').map(c => c.text).join('\n'));
+      }
+      const ids = await evaluate(memberDirectoryReader);
+      assert.equal(ids.length, 2);
+      const first = await evaluate(memberProfileReader(ids[0].id));
+      assert.equal(first.name, 'Student One'); assert.ok(first.roles.includes('m_fre'));
+      await client.callTool({ name: 'browser_press_key', arguments: { key: 'Escape' } });
+      const second = await evaluate(memberProfileReader(ids[1].id));
+      assert.equal(second.name, 'Student Two'); assert.ok(second.roles.includes('sk2'));
+      assert.ok(!second.roles.includes('m_fre'), 'A previous profile must never supply another member\'s roles');
+    }
     return text;
   } finally {
     try { await client.callTool({ name: 'browser_close', arguments: {} }); } catch { /* Release failed transport below. */ }
@@ -89,6 +109,7 @@ try {
   assert.match(document.parts[0].text, /Teacher requirements/);
   await navigate('/notice-fixture');
   await navigate('/discord-fixture');
+  await navigate('/discord-members-fixture');
   console.log('Live Chrome MCP verified: persistent session, navigation, download/extraction, transient notification observer and Discord DOM reader. School/Discord account access is verified separately.');
 } finally {
   await new Promise(resolve => http.close(resolve));

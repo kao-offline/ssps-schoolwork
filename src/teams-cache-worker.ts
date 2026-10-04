@@ -143,6 +143,12 @@ export class BackgroundTeams {
     if (method === 'pause') { this.paused = true; await this.queue.run(() => this.browser.close()); await this.cache.flush(); return this.status(); }
     if (method === 'resume') { this.paused = false; this.leaseUntil = 0; this.refresh(); return this.status(); }
     if (method === 'tools') return this.browser.tools();
+    if (method === 'class_members') {
+      if (this.source !== 'discord' || !(this.browser instanceof DiscordBrowser)) throw new Error('Class members require the Discord reader.');
+      this.leaseUntil = this.now() + 180000;
+      try { return await this.queue.run(() => (this.browser as DiscordBrowser).classMembers()); }
+      finally { this.leaseUntil = 0; }
+    }
     if (method === 'browser') {
       const args = z.object({ name: z.enum(browserTools as [string, ...string[]]), arguments: z.record(z.string(), z.unknown()).default({}) }).parse(input);
       // ponytail: short lease so a live browser session never starves the worker; 20s covers snapshot cadence.

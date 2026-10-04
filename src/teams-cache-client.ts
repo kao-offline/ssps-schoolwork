@@ -20,7 +20,7 @@ export async function cacheRequest(method: string, args: Record<string, unknown>
   if (!credential) throw new Error('Teams background worker is not set up. Run npm run setup:teams-cache.');
   let response: Response;
   try {
-    response = await fetch(`http://127.0.0.1:${sourcePort(source)}/rpc`, { method: 'POST', headers: { Authorization: `Bearer ${credential.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ method, args }), signal: AbortSignal.timeout(['browser', 'pause', 'tools'].includes(method) ? 90000 : 4000), redirect: 'error' });
+      response = await fetch(`http://127.0.0.1:${sourcePort(source)}/rpc`, { method: 'POST', headers: { Authorization: `Bearer ${credential.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ method, args }), signal: AbortSignal.timeout(method === 'class_members' ? 180000 : ['browser', 'pause', 'tools'].includes(method) ? 90000 : 4000), redirect: 'error' });
   } catch { throw new Error('Teams background worker is unavailable. Run npm run start:teams-cache; cached browser data must not be assumed current.'); }
   const result = await response.json() as { data?: unknown; error?: string };
   if (!response.ok || result.error) throw new Error(result.error || 'Teams background request failed.');

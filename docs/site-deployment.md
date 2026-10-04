@@ -16,3 +16,5 @@ Wrangler manages the exact custom domain in `site/wrangler.jsonc`, including DNS
 The exact-host Worker route also takes priority over the zone's existing quickHOST wildcard route. Keep both configured so installer requests reach this site without changing other subdomains.
 
 Rollback using a previous Cloudflare Worker deployment/version, or check out the previous source revision and deploy it again. Private credentials and user data remain outside the website.
+
+The build copies public assets into ignored `site/build/` and pins both served bootstrap scripts to the source Git commit reported by `/health.json`. Push that commit before deployment so GitHub can serve it. Published installers download that exact release using a clean detached checkout, while local source scripts still default to `main`. This keeps the installer and website revisions aligned even while a PR remains open; deployment does not merge the PR. Reruns preserve local changes and private account data. Retain the previous Worker version as the rollback handle.

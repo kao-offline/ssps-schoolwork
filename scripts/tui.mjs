@@ -13,8 +13,8 @@ export function createTui({ output = process.stdout, input = process.stdin, enab
   if (!enabled) return null;
   const steps = [], checks = [], logs = [];
   if (!supportedMouse()) checks.push({ name: 'Mouse', state: 'warn', detail: 'Keyboard only: upgrade Node to 22.18+ / 24.6+' });
-  let active = -1, focused = -1, progress = null, selection = null;
-  let suspended = false, stopped = false, timer, targets = [], buffer = '', logOffset = 0, lastPaint;
+  let active = -1, focused = -1, progress = null, selection = null, prompt = null, message = null, screen = 'prepare';
+  let stopped = false, timer, targets = [], buffer = '', logOffset = 0, lastPaint;
   const startedAt = Date.now();
   const wasRaw = Boolean(input.isRaw);
   // A fresh stdin has readableFlowing=null even though isPaused() is false.
@@ -23,13 +23,18 @@ export function createTui({ output = process.stdout, input = process.stdin, enab
   const interactive = Boolean(input.isTTY && input.setRawMode);
 
   function paint() {
-    if (suspended || stopped) return;
-    const view = renderDashboard({ width: output.columns || 80, height: output.rows || 24, steps, checks, logs, active, focused, progress, selection, logOffset, elapsed: Math.round((Date.now() - startedAt) / 1000) });
+    if (stopped) return;
+    const view = renderDashboard({ width: output.columns || 80, height: output.rows || 24, steps, checks, logs, active, focused, progress, selection, prompt, message, screen, logOffset, elapsed: Math.round((Date.now() - startedAt) / 1000) });
     targets = view.targets;
     if (view.text !== lastPaint) { lastPaint = view.text; output.write(view.text); }
   }
   function apply(action, index) {
     if (action === 'quit') { interrupt(); return; }
+    if (action === 'submit' && prompt) {
+      if (prompt.required && !prompt.value.trim()) { prompt.error = 'Enter a value to continue.'; paint(); return; }
+      const current = prompt; prompt = null; current.resolve(current.value); current.value = ''; paint(); return;
+    }
+    if (action === 'dismiss' && message) { const current = message; message = null; current.resolve(); paint(); return; }
     if (!selection) { if (action === 'step') focused = index; paint(); return; }
     if (action === 'toggle') {
       selection.focus = index;
@@ -39,7 +44,8 @@ export function createTui({ output = process.stdout, input = process.stdin, enab
     } else if (action === 'all') selection.selected = new Set(selection.choices.map(choice => choice.id));
     else if (action === 'none') selection.selected.clear();
     else if (action === 'continue') {
-      if (selection.selected.size < selection.min) selection.error = 'Select at least one connection.';
+      if (selection.selected.size > selection.max) selection.error = 'Choose only one profile.';
+      else if (selection.selected.size < selection.min) selection.error = 'Select at least one connection.';
       else {
         const current = selection;
         selection = null;
@@ -55,7 +61,13 @@ export function createTui({ output = process.stdout, input = process.stdin, enab
       if (event.type === 'click') {
         const target = targets.find(target => event.x >= target.x && event.x < target.x + target.width && event.y >= target.y && event.y < target.y + target.height);
         if (target) apply(target.action, target.index);
-      } else if (event.key === 'cancel' || event.key === 'q') interrupt();
+      } else if (event.key === 'cancel') interrupt();
+      else if (prompt) {
+        if (event.key === 'enter') apply('submit');
+        else if (event.key === 'backspace') prompt.value = Array.from(prompt.value).slice(0, -1).join('');
+        else if (event.text && !/[\p{Cc}\p{Cf}]/u.test(event.text) && prompt.value.length < 2048) prompt.value += event.text;
+        paint();
+      } else if (message) { if (event.key === 'enter') apply('dismiss'); }
       else if (selection) {
         if (['up', 'down', 'pageup', 'pagedown'].includes(event.key)) {
           const delta = event.key === 'up' ? -1 : event.key === 'down' ? 1 : event.key === 'pageup' ? -5 : 5;
@@ -98,8 +110,10 @@ export function createTui({ output = process.stdout, input = process.stdin, enab
     process.removeListener('SIGINT', interrupt);
     process.removeListener('SIGTERM', terminate);
     output.removeListener?.('resize', paint);
-    if (!suspended) output.write(LEAVE);
+    output.write(LEAVE);
     if (selection) { selection.reject(new Error('Setup selection cancelled.')); selection = null; }
+    if (prompt) { prompt.value = ''; prompt.reject(new Error('Setup input cancelled.')); prompt = null; }
+    if (message) { message.resolve(); message = null; }
   }
   const interrupt = () => { stop(); exit(130); };
   const terminate = () => { stop(); exit(143); };
@@ -116,23 +130,24 @@ export function createTui({ output = process.stdout, input = process.stdin, enab
     },
     bar(completed, total, extra) { progress = { completed, total, extra }; paint(); },
     log(line) { const text = cleanText(line).trim(); if (text) { logs.push(text); if (logs.length > 200) logs.shift(); logOffset = 0; paint(); } },
-    select(choices, defaults, title, { min = 1 } = {}) {
+    select(choices, defaults, title, { min = 1, max = Infinity, button = 'Continue' } = {}) {
       if (stopped) return Promise.reject(new Error('Setup interface is closed.'));
       if (!interactive) return Promise.reject(new Error('Interactive selection needs a terminal. Use --yes or explicit --sources/--apps.'));
       if (selection) return Promise.reject(new Error('Another setup selection is active.'));
       return new Promise((resolve, reject) => {
-        selection = { choices, selected: new Set(defaults), title, focus: 0, min, error: '', resolve, reject };
+        selection = { choices, selected: new Set(defaults), title, button, focus: 0, min, max, error: '', resolve, reject };
         paint();
       });
     },
-    async suspend(task) {
-      suspended = true;
-      clearInterval(timer);
-      detach();
-      output.write(LEAVE);
-      try { return await task(); }
-      finally { suspended = false; if (!stopped) enter(); }
+    input(title, { secret = false, required = true, description = '', value = '' } = {}) {
+      if (stopped || !interactive) return Promise.reject(new Error('Input needs an open interactive terminal.'));
+      return new Promise((resolve, reject) => { prompt = { title, secret, required, description, value, error: '', resolve, reject }; paint(); });
     },
+    message(title, lines, button = 'Done') {
+      if (stopped || !interactive) return Promise.resolve();
+      return new Promise(resolve => { message = { title, lines, button, resolve }; paint(); });
+    },
+    screen(value) { screen = value; paint(); },
     stop,
   };
   process.once('exit', stop);
@@ -141,11 +156,6 @@ export function createTui({ output = process.stdout, input = process.stdin, enab
   output.on?.('resize', paint);
   enter();
   return ui;
-}
-
-// Static recap that survives the alternate screen: call after stop().
-export function recap(lines) {
-  for (const [label, detail] of lines) console.log(`✓ ${label}${detail ? ` · ${detail}` : ''}`);
 }
 
 // Spawn with output captured into the dashboard log; failures dump the tail.

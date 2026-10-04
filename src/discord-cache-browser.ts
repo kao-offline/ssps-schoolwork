@@ -1,6 +1,7 @@
-import { TeamsBrowser, snapshotYaml, type Route } from './teams-cache-browser.js';
+import { TeamsBrowser, snapshotYaml, elementRef, type Route } from './teams-cache-browser.js';
 import { cacheId, type Observation } from './teams-cache.js';
 import { noticeReader, evaluationJson, noticeObservations } from './browser-notices.js';
+import { classGuild, memberDirectoryReader, memberProfileReader, scrollMemberDirectory, type ClassMember } from './discord-members.js';
 export const discordInitialRoutes: Route[] = [
   { id: 'discord/navigation', kind: 'servers', title: 'Accessible Discord servers and DMs', url: 'https://discord.com/channels/@me', intervalMs: 600000 },
   { id: 'discord/notifications', kind: 'notifications', title: 'Discord unread and mention indicators', url: 'https://discord.com/channels/@me', intervalMs: 30000 },
@@ -66,6 +67,44 @@ export function discordChannel(url: string) {
 }
 export class DiscordBrowser extends TeamsBrowser {
   constructor() { super('discord'); }
+  async classMembers() {
+    const url = `https://discord.com/channels/${classGuild}/1423979576358342666`;
+    await this.text('browser_navigate', { url });
+    await this.text('browser_wait_for', { text: 'rules' });
+    const snapshot = await this.text('browser_snapshot');
+    if (!snapshot.includes(`Page URL: https://discord.com/channels/${classGuild}/`)) throw new Error('class_server_unavailable');
+    const dismissRef = elementRef(snapshot, 'heading', 'Diddy party 2.B: rules') || elementRef(snapshot, 'heading', 'Chat rules');
+    if (!dismissRef) throw new Error('class_channel_heading_unavailable');
+    const members = new Map<string, ClassMember>();
+    const observed = new Set<string>();
+    const started = Date.now();
+    for (let page = 0; page < 30 && Date.now() - started < 140000; page++) {
+      let ids: { id: string; label: string }[] = [];
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try { ids = evaluationJson(await this.text('browser_evaluate', { function: memberDirectoryReader })); break; }
+        catch (error) { if (attempt === 2) throw error; await this.text('browser_wait_for', { time: 1 }); }
+      }
+      for (const { id, label } of ids) {
+        if (observed.has(id) || Date.now() - started >= 140000) continue;
+        observed.add(id);
+        try {
+          const view = await this.text('browser_snapshot');
+          const ref = label && elementRef(view, 'img', label);
+          if (!ref) continue;
+          await this.text('browser_click', { target: ref });
+          const member = evaluationJson(await this.text('browser_evaluate', { function: memberProfileReader(id, false, label.split(',')[0].trim()) }));
+          if (member) members.set(id, { ...member, sourceUrl: url, checkedAt: new Date().toISOString() });
+        } finally {
+          await this.text('browser_press_key', { key: 'Escape' });
+          // Discord profile popouts can ignore Escape when opened without focus.
+          // A real click on the channel heading dismisses them without a composer.
+          await this.text('browser_click', { target: dismissRef });
+        }
+      }
+      if (!evaluationJson(await this.text('browser_evaluate', { function: scrollMemberDirectory }))) break;
+    }
+    return { members: [...members.values()], complete: false, coverage: 'Rendered class members and profile roles; hidden/offline members may be absent.' };
+  }
   async collect(route: Route): Promise<{ observations: Observation[]; discovered: Route[]; owner?: string }> {
     if (!route.url) throw new Error('discord_channel_not_configured');
     let text = await this.text('browser_snapshot');

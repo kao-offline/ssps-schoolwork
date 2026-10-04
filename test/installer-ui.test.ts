@@ -43,7 +43,7 @@ test('dashboard fits small terminals, keeps completed steps and restores termina
     assert.ok(frame.includes('✓ Install dependencies'));
     assert.ok(frame.split('\r\n').every(line => Array.from(line).length < output.columns));
     assert.ok(frame.split('\n').length <= output.rows);
-    await assert.rejects(ui.suspend(async () => { throw new Error('sign-in failed'); }), /sign-in failed/);
+    assert.equal(output.frames.filter(value => value.includes('\x1b[?1049h')).length, 1);
     ui.stop();
     const length = output.frames.length;
     ui.stop(); output.emit('resize');
@@ -78,8 +78,8 @@ test('mouse clicks, wheel scrolling and keyboard selection work with real termin
     input.emit('data', '\r');
     assert.deepEqual(await result, ['app0', 'app1', 'app2']);
     assert.ok(output.frames.some(frame => frame.includes('\x1b[?1000h')));
-    assert.ok(output.frames.some(frame => frame.includes('\x1b[48;2;34;211;238m')));
-    await ui.suspend(async () => { assert.equal(input.isRaw, false); assert.equal(input.paused, true); });
+    assert.ok(output.frames.some(frame => frame.includes('\x1b[48;2;167;139;250m')));
+    assert.equal(output.frames.filter(value => value.includes('\x1b[?1049h')).length, 1);
     assert.equal(input.isRaw, true);
   } finally { ui.stop(); }
   assert.equal(input.isRaw, false);
@@ -177,6 +177,23 @@ test('real installer checks dependencies and installs an isolated agent profile 
     assert.equal(report.failures.length, 0);
     assert.equal(report.workers.length, 0);
     assert.equal(report.installed[0].config, join(agent, 'config.toml'));
+    const script = `
+      import {EventEmitter} from 'node:events';
+      import {createTui} from ${JSON.stringify(new URL('../scripts/tui.mjs', import.meta.url).href)};
+      import {runSetup} from ${JSON.stringify(new URL('file:///' + join(project, 'scripts/setup-runner.mjs').replaceAll('\\', '/')).href)};
+      globalThis.fetch = async () => new Response('<h1>Tasks View - 2.B SSPŠ</h1><input id="filter_checkbox_group_sk2" value="sk2"><div class="tasks"><div class="task"><div class="task-date">7.10.2026</div><div class="task-name">PDV</div><div class="task-groups">sk2</div><div class="task-description">Presentation</div></div></div>');
+      const input=Object.assign(new EventEmitter(),{isTTY:true,setRawMode(){},resume(){},pause(){},isPaused(){return true}});
+      const frames=[];const output=Object.assign(new EventEmitter(),{columns:100,rows:28,write(value){frames.push(value)}});
+      const ui=createTui({input,output,enabled:true});
+      const message=ui.message.bind(ui);ui.message=(...args)=>{const pending=message(...args);setImmediate(()=>input.emit('data','\\r'));return pending};
+      await runSetup({ui,flags:['--agents-only','--yes','--apps=grok','--sources=bakalari','--2b','--groups=sk2','--subjects=PDV']});
+      ui.stop();
+      console.log(JSON.stringify({entered:frames.filter(f=>f.includes('\\x1b[?1049h')).length,left:frames.filter(f=>f.includes('\\x1b[?1049l')).length,ready:frames.some(f=>f.includes('Your workspace is connected.'))}));
+    `;
+    const fullScreen = await execute(process.execPath, ['--input-type=module', '-e', script], { env: { ...process.env, GROK_HOME: agent, SCHOOLWORK_DATA_DIR: join(directory, 'data') }, timeout: 30000, windowsHide: true });
+    assert.deepEqual(JSON.parse(fullScreen.stdout), { entered: 1, left: 1, ready: true });
+    const moduleReport = JSON.parse(await readFile(join(project, 'setup-report.local.json'), 'utf8'));
+    assert.deepEqual(moduleReport.module2B.groups, ['sk2']);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
@@ -208,4 +225,27 @@ test('child capture keeps stderr separate and retains failure output after dashb
   logs.length = 0;
   await runTui(spawn, { log: (line: string) => logs.push(line) }, process.execPath, ['-e', "process.stdout.write('success without newline')"]);
   assert.deepEqual(logs, ['success without newline']);
+});
+
+test('installer keeps one screen through hidden input, review, installation and Done', async () => {
+  const input = terminalInput();
+  const output = Object.assign(new EventEmitter(), { columns: 100, rows: 28, frames: [] as string[], write(value: string) { this.frames.push(value); } });
+  const ui = createTui({ input, output, enabled: true })!;
+  try {
+    const password = ui.input('Password', { secret: true });
+    input.emit('data', 'secretQé😀');
+    assert.ok(output.frames.every(frame => !frame.includes('secretQ')));
+    input.emit('data', '\x7f\r');
+    assert.equal(await password, 'secretQé');
+    const review = ui.message('Review', ['Teams, Bakalari, 2B'], 'Install');
+    input.emit('data', '\r'); await review;
+    ui.screen('install'); const step = ui.step('Connect accounts'); ui.run(step); ui.ok(step);
+    let done = false;
+    const completion = ui.message('Ready', ['Start a new agent session.']).then(() => { done = true; });
+    await Promise.resolve(); assert.equal(done, false);
+    input.emit('data', '\r'); await completion;
+    assert.equal(output.frames.filter(frame => frame.includes('\x1b[?1049h')).length, 1);
+    assert.equal(output.frames.filter(frame => frame.includes('\x1b[?1049l')).length, 0);
+  } finally { ui.stop(); }
+  assert.equal(output.frames.filter(frame => frame.includes('\x1b[?1049l')).length, 1);
 });

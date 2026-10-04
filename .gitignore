@@ -13,3 +13,4 @@ setup-report.local.json
 .playwright-mcp/
 .wrangler/
 site/public/health.json
+site/build/
