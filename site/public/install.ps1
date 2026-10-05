@@ -8,8 +8,13 @@
   $SspsRevision = 'main'
   if (Test-Path -LiteralPath $SspsTarget) {
     if (!(Test-Path -LiteralPath (Join-Path $SspsTarget '.git'))) { throw 'Installation folder already exists and is not this Git repository. Nothing was overwritten.' }
+    function Ssps-NormalizeRepo([string]$SspsUrl) {
+      $SspsNormalized = $SspsUrl.Trim().TrimEnd('/')
+      if ($SspsNormalized -match '^git@([^:]+):(.+)$') { $SspsNormalized = 'https://' + $Matches[1] + '/' + $Matches[2] }
+      return ($SspsNormalized -replace '\.git$','').ToLowerInvariant()
+    }
     $SspsRemote = git -C $SspsTarget remote get-url origin
-    if ($LASTEXITCODE -ne 0 -or $SspsRemote -ne $SspsRepo) { throw 'Existing folder belongs to another repository. Nothing was overwritten.' }
+    if ($LASTEXITCODE -ne 0 -or (Ssps-NormalizeRepo $SspsRemote) -ne (Ssps-NormalizeRepo $SspsRepo)) { throw "Existing folder points at '$SspsRemote', not this installer. Nothing was overwritten. To reinstall: rename that folder as a backup, then rerun this command. Your accounts live outside the folder and are kept." }
     $SspsDirty = git -C $SspsTarget status --porcelain
     if ($LASTEXITCODE -ne 0 -or $SspsDirty) { throw 'Existing source has local changes. Commit them or install from your existing folder.' }
     if ($SspsRevision -eq 'main') { git -C $SspsTarget pull --quiet --ff-only origin main }
